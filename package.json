@@ -1,0 +1,27 @@
+{
+  "name": "myRFB",
+  "version": "0.0.1",
+  "description": "Simple RFB protocol implementetion",
+  "main": "src/rfb",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "chai": "^1.10.0",
+    "grunt": "^0.4.5",
+    "grunt-contrib-watch": "^0.6.1",
+    "grunt-mocha-test": "^0.12.6",
+    "grunt-todo": "^0.4.0",
+    "gruntfile-gtx": "^0.3.0",
+    "load-grunt-tasks": "^2.0.0",
+    "mocha": "^2.1.0",
+    "proxyquire": "^1.3.0",
+    "sinon": "^1.12.2",
+    "sinon-chai": "^2.6.0"
+  },
+  "author": "Andrei V. Toutoukine",
+  "license": "ISC",
+  "dependencies": {
+    "require-directory": "^2.0.0"
+  }
+}
