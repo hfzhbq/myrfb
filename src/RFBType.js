@@ -194,7 +194,47 @@ function toBuffer (buf, pos, type, value) {
 }
 
 
+function BaseType (descr, method, value) {
+    this._descr = descr;
+    this._value = value;
+    this._method = method;
+}
+
+
+var btp = BaseType.prototype;
+
+btp.name = function () {
+    return this._descr.name;
+};
+
+btp.requiredLength = function () {
+    return this._descr.nbytes;
+};
+
+btp.fromBuffer = function (buf, pos) {
+    var method = 'read' + this._method;
+    this._value = buf[method](pos);
+};
+
+btp.toBuffer = function (buf, pos) {
+    var method = 'read' + this._method;
+    buf[method](this._value, pos);
+};
+
+btp.value = function () {
+    return this._value;
+};
+
+function createValue (descr, value) {
+    var type = descr.type.toUpperCase();
+    
+    if ( BASE_TYPES[type] ) {
+        return new BaseType(descr, BASE_TYPES[type], value);
+    }
+}
+
 module.exports = {
+    createValue:    createValue,
     fromBuffer: fromBuffer,
     toBuffer:   toBuffer
 };

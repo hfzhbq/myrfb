@@ -13,7 +13,46 @@ describe('RFBType', function () {
         done();
     });
     
+    describe('.createValue(descr[, value])', function () {
+        
+        it('should be a static method', function (done) {
+            expect(this.RFBType.createValue).to.be.a('function');
+            done();
+        });
+        
+        it('should instantiate all basic types', function (done) {
+            var T = this.RFBType;
+            'u8,s8,u16,s16,u32,s32'.split(',').forEach( function (typ, i) {
+                var signed = 's' === typ.substr(0,1);
+                var nbytes = parseInt( typ.substr(1), 10 ) / 8;
+                var method = (signed ? '' : 'U') + 'Int' + nbytes*8 + (nbytes > 1 ? 'BE' : '');
+                var value = Math.pow(2, i) + 3;
+                
+                var instance, buf;
+                
+                // value to read
+                instance = T.createValue({
+                    name:   'propertyName',
+                    type:   typ,
+                    nbytes: nbytes
+                });
+                
+                expect(instance.name()).to.equal('propertyName');
+                expect(instance.requiredLength()).to.equal(nbytes);
+                
+                buf = new Buffer(nbytes);
+                buf['write'+method](value, 0);
+                instance.fromBuffer(buf, 0);
+                
+                expect(instance.value()).to.equal(value);
+                
+            });
+            done();
+        });
+        
+    });
     
+    // the code below is deprecated %-E
     describe('.fromBuffer(buf, pos, type, nbytes)', function () {
         it('should be a static method', function (done) {
             expect(this.RFBType.fromBuffer).to.be.a('function');
