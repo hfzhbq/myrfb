@@ -195,6 +195,17 @@ describe('RFBType', function () {
 
             done();
         });
+        
+        it('should understand version type', function (done) {
+            var buf = new Buffer('RFB 003.008\n');
+            expect(buf.length).to.equal(12);
+            
+            var ver = this.RFBType.fromBuffer(buf, 0, 'version', 12);
+            
+            expect(ver).to.equal('3.8');
+            
+            done();
+        });
     });
     
     
@@ -292,6 +303,15 @@ describe('RFBType', function () {
             var res = this.RFBType.fromBuffer(buf, 0, 'pixel_format', 16);
             
             expect(res).to.deep.equal(format);
+            done();
+        });
+        
+        it('should understand version', function (done) {
+            var buf = new Buffer(12);
+            
+            this.RFBType.toBuffer(buf, 0, 'version', '3.30'); //just to test zeroes
+            
+            expect(buf.toString()).to.equal('RFB 003.030\n');
             done();
         });
     });

@@ -1,3 +1,5 @@
+var util = require('util');
+
 var BASE_TYPES = {
     U8:     'UInt8',
     U16:    'UInt16BE',
@@ -11,6 +13,10 @@ var COMPLEX_TYPES = {
     U8STRING:   {
         read:   readU8String,
         write:  writeU8String
+    },
+    VERSION:    {
+        read:   readVersion,
+        write:  writeVersion
     },
     PIXEL_FORMAT: {
         read:   readPixelFormat,
@@ -51,7 +57,21 @@ function writeU8String (buf, pos, string) {
 }
 
 
+function readVersion (buf, pos, nbytes) {
+    var s = buf.toString('utf8', pos, pos+nbytes);
+    var maj = parseInt(s.substr(4,3), 10);
+    var min = parseInt(s.substr(8,3), 10);
+    
+    return util.format('%d.%d',maj, min);
+}
 
+function writeVersion (buf, pos, version) {
+    var a = version.split('.');
+    var maj = '00' + parseInt(a[0], 10);
+    var min = '00' + parseInt(a[1], 10);
+    
+    buf.write( util.format('RFB %s.%s\n', maj.substr(-3), min.substr(-3)), pos );
+}
 function readPixelFormat (buf, pos, nbytes) {
     var format = {};
 
