@@ -196,4 +196,103 @@ describe('RFBType', function () {
             done();
         });
     });
+    
+    
+    
+    describe('.toBuffer(buf, pos, type, value)', function () {
+        it('should be a static method', function (done) {
+            expect(this.RFBType.toBuffer).to.be.a('function');
+            done();
+        });
+        
+        it('should understand all the basic types', function (done) {
+            var T = this.RFBType;
+            
+            'u8,s8,u16,s16,u32,s32'.split(',').forEach( function (typ, i) {
+                var signed = 's' === typ.substr(0,1);
+                var nbytes = parseInt( typ.substr(1), 10 ) / 8;
+                var value = (signed ? -1: 1) * Math.pow(2, i);
+                
+                var buf = new Buffer(nbytes);
+                
+                T.toBuffer(buf, 0, typ, value);
+                
+                expect( T.fromBuffer(buf, 0, typ, nbytes) ).to.equal(value);
+            });
+            done();
+        });
+        
+        it('should throw if no type is given', function (done) {
+            var T = this.RFBType;
+            var buf = new Buffer('aaa');
+            
+            expect( function () {
+                T.toBuffer(buf, 0, undefined, 0);
+            }).to.throw('type is required');
+            done();
+        });
+        
+        it('should throw if type is unknown', function (done) {
+            var T = this.RFBType;
+            var buf = new Buffer('aaa');
+
+            expect( function () {
+                T.toBuffer(buf, 0, 'ThisTypeIsNotDefined', 0);
+            }).to.throw('is not defined');
+            
+            done();
+        });
+        
+        it('should understand arrays of basic types', function (done) {
+            var array = [2, 4, 6, 8, 10, 12];
+            var T = this.RFBType;
+            
+            'u8,s8,u16,s16,u32,s32'.split(',').forEach( function (typ) {
+                var nbytes = array.length * parseInt(typ.substr(1), 10) / 8;
+                var buf = new Buffer(nbytes);
+                
+                T.toBuffer(buf, 0, typ, array);
+                
+                expect( T.fromBuffer(buf, 0, typ, nbytes) ).to.deep.equal(array);
+            });
+            
+            
+            done();
+        });
+        
+        
+        it('should understand u8string', function (done) {
+            var string = 'a 8bit string';
+            var buf = new Buffer(string.length);
+            this.RFBType.toBuffer(buf, 0, 'u8string', string);
+            
+            var res = this.RFBType.fromBuffer(buf, 0, 'u8string', string.length);
+            
+            expect(res).to.equal(string);
+            done();
+        });
+        
+        it('should understand pixel_format', function (done) {
+            var buf = new Buffer(16);
+            var format = {
+                bitsPerPixel:   7,
+                depth:          4,
+                bigEndianFlag:  1,
+                trueColourFlag: 1,
+                redMax:         10,
+                greenMax:       11,
+                blueMax:        12,
+                redShift:       2,
+                greenShift:     4,
+                blueShift:      6
+            };
+            
+            this.RFBType.toBuffer(buf, 0, 'pixel_format', format);
+            
+            var res = this.RFBType.fromBuffer(buf, 0, 'pixel_format', 16);
+            
+            expect(res).to.deep.equal(format);
+            done();
+        });
+    });
 });

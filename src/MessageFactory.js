@@ -60,15 +60,61 @@ function checkPlan (descr) {
 }
 
 
-function Message (plan) {
+function Message (planName, plan, data) {
     this._planPos = 0;
+    this._name = planName;
     this._plan = plan;
     this._properties = {
     };
+    
+    this._feedData(data);
 };
 
 
 var p = Message.prototype;
+
+p.name = function () {
+    return this._name;
+};
+
+p._feedData = function _feedData (data) {
+    var pl, i, v, l;
+    
+    if ( typeof data !== 'object' ) {
+        return;
+    }
+    
+    for ( i = this._plan.length - 1; i >= 0; i-- ) {
+        pl = this._plan[i];
+        
+        if ( 'PADDING' === pl.type.toUpperCase() ) {
+            continue;
+        }
+        
+        v = this.getProperty(pl.name);
+        if ( typeof v !== 'undefined' ) {
+            // already set (e.g. by length calculation
+            continue;
+        }
+        
+        v = data[pl.name];
+        if ( typeof v === 'undefined' ) {
+            throw Error('missing value for property "' + pl.name + '"');
+        }
+        
+        this._setProperty(pl.name, v);
+        if ( typeof pl.nbytes === 'string' ) {
+            l = data[pl.name].length;
+            if ( pl.type.substr(1) === '16' ) {
+                l *= 2;
+            }
+            if ( pl.type.substr(1) === '32' ) {
+                l *= 4;
+            }
+            this._setProperty(pl.nbytes, l);
+        }
+    }
+};
 
 p.requiredLength = function requiredLength () {
     var i = this._planPos;
@@ -129,16 +175,54 @@ p.addChunk = function addChunk (chunk) {
     }
 };
 
-function prepare (planName) {
+p.toBuffer = function toBuffer() {
+    var buf = new Buffer( this.requiredLength() );
+    var planPos = 0;
+    var bufPos  = 0;
+    var part, nbytes, value;
+    
+    while ( bufPos < buf.length && planPos < this._plan.length ) {
+        part = this._plan[planPos];
+        nbytes = typeof part.nbytes === 'string' ?
+            this.getProperty(part.nbytes) : part.nbytes;
+        
+        if ( part.type.toUpperCase() !== 'PADDING' ) {
+            value = this.getProperty(part.name);
+            RFBType.toBuffer(buf, bufPos, part.type, value);
+        }
+        
+        bufPos += nbytes;
+        planPos++;
+
+    }
+    
+    return buf;
+};
+
+function prepareIncoming (planName) {
     var plan = this.getPlan(planName);
-    var msg = new Message(plan);
+    var msg = new Message(planName, plan);
     return msg;
 }
+
+
+function prepareOutgoing (planName, data) {
+    if ( typeof data !== 'object' ) {
+        throw Error('can not prepare outgoing message "'+planName+'": data are required');
+    }
+    var plan = this.getPlan(planName);
+    var msg = new Message(planName, plan, data);
+    return msg;
+}
+
 
 module.exports = {
     getPlan:    getPlan,
     addPlan:    addPlan,
     checkPlan:  checkPlan,
-    prepare:    prepare,
+    
+    prepareIncoming:    prepareIncoming,
+    prepareOutgoing:    prepareOutgoing,
+    
     Message:    Message
 };

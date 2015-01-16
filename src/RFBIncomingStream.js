@@ -1,4 +1,4 @@
-function RFBServerStream (socket) {
+function RFBIncomingStream (socket) {
     this._buffer = new Buffer(0);
     this._requests = [];
     socket.on('data', this.addChunk.bind(this));
@@ -6,7 +6,7 @@ function RFBServerStream (socket) {
     // FIXME: listen to socket's 'error' and 'end' events too!
 }
 
-var p = RFBServerStream.prototype;
+var p = RFBIncomingStream.prototype;
 
 p.receive = function receive (msg, cb) {
     this._requests.push({
@@ -91,10 +91,10 @@ p.processHeadRequest = function processHeadRequest () {
 };
 
 function create (socket) {
-    return new RFBServerStream(socket);
+    return new RFBIncomingStream(socket);
 }
 
 module.exports = {
     create: create,
-    RFBServerStream: RFBServerStream
+    RFBIncomingStream: RFBIncomingStream
 };

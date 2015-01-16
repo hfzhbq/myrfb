@@ -7,17 +7,15 @@ describe('MyRFB', function () {
         
         this.async = test.mock('async');
         
-        this.ClientMessageFactory = test.mock('ClientMessageFactory');
-        this.ServerMessageFactory = test.mock('ServerMessageFactory');
+        this.MessageFactory = test.mock('MessageFactory');
         
-        this.serverStream = test.mock('serverStream');
-        this.RFBServerStream = test.mock('RFBServerStream');
+        this.serverStream = test.mock('incomingStream');
+        this.RFBServerStream = test.mock('RFBIncomingStream');
         this.RFBServerStream.create.withArgs(this.socket).returns(this.serverStream);
         
         this.MyRFB = test.proxyquire('../../src/MyRFB', {
             async:  this.async,
-            './ClientMessageFactory': this.ClientMessageFactory,
-            './ServerMessageFactory': this.ServerMessageFactory,
+            './MessageFactory': this.MessageFactory,
             './RFBServerStream': this.RFBServerStream
         });
 
@@ -266,15 +264,16 @@ describe('MyRFB', function () {
                 done();
             });
             
-            it('should use ClientMessageFactory to create a message', function (done) {
+            it('should use MessageFactory to create a message', function (done) {
                 var msgName = 'a message name';
                 var cb = test.sinon.spy();
                 
-                this.ClientMessageFactory.create.withArgs(msgName).returns(this.msg);
+                // TODO: data!!!
+                this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
                 
                 this.myRFB.send(msgName, cb);
                 
-                expect(this.ClientMessageFactory.create).calledOnce
+                expect(this.MessageFactory.prepareOutgoing).calledOnce
                 .and.calledWithExactly(msgName);
                 
                 done();
@@ -286,7 +285,7 @@ describe('MyRFB', function () {
                 var cb = test.sinon.spy();
                 
                 this.msg.toBuffer.returns(this.msg.$buffer);
-                this.ClientMessageFactory.create.withArgs(msgName).returns(this.msg);
+                this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
                 
                 this.myRFB.send(msgName, cb);
                 
@@ -309,7 +308,7 @@ describe('MyRFB', function () {
                 var message = {an: 'incoming message'};
                 var cb = test.sinon.spy();
                 
-                this.ServerMessageFactory.prepare.withArgs(msgName).returns(message);
+                this.MessageFactory.prepareIncoming.withArgs(msgName).returns(message);
                 
                 this.myRFB.receive(msgName, cb);
                 

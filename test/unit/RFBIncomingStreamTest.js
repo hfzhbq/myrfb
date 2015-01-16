@@ -1,24 +1,24 @@
 var test = require('../support/test');
 var expect = test.expect;
 
-describe('RFBServerStream', function () {
+describe('RFBIncomingStream', function () {
     beforeEach(function (done) {
         this.socket = test.mock('socket');
-        this.msg = test.mock('incompleteMessage');
-        this.RFBServerStream = test.proxyquire('../../src/RFBServerStream', {
+        this.msg = test.mock('message');
+        this.RFBIncomingStream = test.proxyquire('../../src/RFBIncomingStream', {
         });
         
-        this.serverStream = this.RFBServerStream.create(this.socket);
+        this.serverStream = this.RFBIncomingStream.create(this.socket);
         done();
     });
     
     it('should exist', function (done) {
-        expect(this.RFBServerStream).to.exist;
+        expect(this.RFBIncomingStream).to.exist;
         done();
     });
     
-    it('should export RFBServerStream constructor', function (done) {
-        var constr = this.RFBServerStream.RFBServerStream;
+    it('should export RFBIncomingStream constructor', function (done) {
+        var constr = this.RFBIncomingStream.RFBIncomingStream;
         expect(constr).to.exist;
         expect(this.serverStream).to.be.instanceof(constr);
         done();
@@ -31,7 +31,7 @@ describe('RFBServerStream', function () {
         });
         
         it('should be a static method', function (done) {
-            expect(this.RFBServerStream.create).to.be.a('function');
+            expect(this.RFBIncomingStream.create).to.be.a('function');
             done();
         });
         
@@ -45,8 +45,8 @@ describe('RFBServerStream', function () {
             beforeEach(function (done) {
                 this.addChunkSpy = test.sinon.spy();
                 this.socket = test.mock('socket');
-                this.RFBServerStream.RFBServerStream.prototype.addChunk = this.addChunkSpy;
-                this.serverStream = this.RFBServerStream.create(this.socket);
+                this.RFBIncomingStream.RFBIncomingStream.prototype.addChunk = this.addChunkSpy;
+                this.serverStream = this.RFBIncomingStream.create(this.socket);
                 
                 this.listener = test.findCallWith(this.socket.on, 'data').args[1];
                 

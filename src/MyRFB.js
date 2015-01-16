@@ -1,8 +1,7 @@
 var async = require('async');
 
 var RFBServerStream = require('./RFBServerStream');
-var ClientMessageFactory = require('./ClientMessageFactory');
-var ServerMessageFactory = require('./ServerMessageFactory');
+var MessageFactory = require('./MessageFactory');
 
 function MyRFB (socket) {
     this._socket = socket;
@@ -41,12 +40,13 @@ p.initialise = function initialise (cb) {
 
 
 p.send = function send (msgName, cb) {
-    var msg = ClientMessageFactory.create(msgName);
+    // FIXME: data to prepare an outcoming message ???
+    var msg = MessageFactory.prepareOutgoing(msgName);
     this._socket.send(msg.toBuffer(), cb);
 };
 
 p.receive = function receive (msgName, cb) {
-    var msg = ServerMessageFactory.prepare(msgName);
+    var msg = MessageFactory.prepareIncoming(msgName);
     this._serverStream.receive(msg, cb);
 };
 

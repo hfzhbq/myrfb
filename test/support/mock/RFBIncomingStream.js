@@ -1,9 +1,9 @@
 var sinon = require('sinon');
 
 module.exports = function (options) {
-    var factory = {};
+    var RFBIS = {};
     
-    factory.prepare = sinon.stub();
+    RFBIS.create = sinon.stub();
     
-    return factory;
+    return RFBIS;
 };
