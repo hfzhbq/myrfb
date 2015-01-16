@@ -206,6 +206,22 @@ describe('RFBType', function () {
             
             done();
         });
+        
+        it('should understand rgb type', function (done) {
+            var buf = new Buffer(6);
+            var colour = {
+                red:    200,
+                green:  120,
+                blue:   74
+            };
+            
+            buf.writeUInt16BE(colour.red, 0);
+            buf.writeUInt16BE(colour.green, 2);
+            buf.writeUInt16BE(colour.blue, 4);
+            
+            expect(this.RFBType.fromBuffer(buf, 0, 'rgb', 6)).to.deep.equal(colour);
+            done();
+        });
     });
     
     
@@ -312,6 +328,16 @@ describe('RFBType', function () {
             this.RFBType.toBuffer(buf, 0, 'version', '3.30'); //just to test zeroes
             
             expect(buf.toString()).to.equal('RFB 003.030\n');
+            done();
+        });
+        
+        it('should understand rgb type', function (done) {
+            var buf = new Buffer(6);
+            var rgb = {red: 3, green: 44, blue: 34};
+            
+            this.RFBType.toBuffer(buf, 0, 'rgb', rgb);
+            
+            expect(this.RFBType.fromBuffer(buf, 0, 'rgb', 6)).to.deep.equal(rgb);
             done();
         });
     });

@@ -97,7 +97,7 @@ p._feedData = function _feedData (data) {
             continue;
         }
         
-        v = data[pl.name];
+        v = data[pl.name] || pl.default;
         if ( typeof v === 'undefined' ) {
             throw Error('missing value for property "' + pl.name + '"');
         }
@@ -105,6 +105,7 @@ p._feedData = function _feedData (data) {
         this._setProperty(pl.name, v);
         if ( typeof pl.nbytes === 'string' ) {
             l = data[pl.name].length;
+            // length to nbytes
             if ( pl.type.substr(1) === '16' ) {
                 l *= 2;
             }

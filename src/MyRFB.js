@@ -1,11 +1,11 @@
 var async = require('async');
 
-var RFBServerStream = require('./RFBServerStream');
+var RFBIncomingStream = require('./RFBIncomingStream');
 var MessageFactory = require('./MessageFactory');
 
 function MyRFB (socket) {
     this._socket = socket;
-    this._serverStream = RFBServerStream.create(socket);
+    this._incomingStream = RFBIncomingStream.create(socket);
 }
 
 
@@ -47,7 +47,7 @@ p.send = function send (msgName, cb) {
 
 p.receive = function receive (msgName, cb) {
     var msg = MessageFactory.prepareIncoming(msgName);
-    this._serverStream.receive(msg, cb);
+    this._incomingStream.receive(msg, cb);
 };
 
 function create (socket) {

@@ -18,6 +18,10 @@ var COMPLEX_TYPES = {
         read:   readVersion,
         write:  writeVersion
     },
+    RGB:        {
+        read:   readRGB,
+        write:   writeRGB
+    },
     PIXEL_FORMAT: {
         read:   readPixelFormat,
         write:  writePixelFormat
@@ -72,6 +76,27 @@ function writeVersion (buf, pos, version) {
     
     buf.write( util.format('RFB %s.%s\n', maj.substr(-3), min.substr(-3)), pos );
 }
+
+
+function readRGB (buf, pos, nbytes) {
+    // FIXME: check nbytes
+    var rgb = {};
+    
+    rgb.red = buf.readUInt16BE(pos);
+    rgb.green = buf.readUInt16BE(pos+2);
+    rgb.blue = buf.readUInt16BE(pos+4);
+    
+    return rgb;
+}
+
+
+function writeRGB (buf, pos, rgb) {
+    buf.writeUInt16BE(rgb.red, pos);
+    buf.writeUInt16BE(rgb.green, pos+2);
+    buf.writeUInt16BE(rgb.blue, pos+4);
+}
+
+
 function readPixelFormat (buf, pos, nbytes) {
     var format = {};
 

@@ -10,13 +10,13 @@ describe('MyRFB', function () {
         this.MessageFactory = test.mock('MessageFactory');
         
         this.serverStream = test.mock('incomingStream');
-        this.RFBServerStream = test.mock('RFBIncomingStream');
-        this.RFBServerStream.create.withArgs(this.socket).returns(this.serverStream);
+        this.RFBIncomingStream = test.mock('RFBIncomingStream');
+        this.RFBIncomingStream.create.withArgs(this.socket).returns(this.serverStream);
         
         this.MyRFB = test.proxyquire('../../src/MyRFB', {
             async:  this.async,
             './MessageFactory': this.MessageFactory,
-            './RFBServerStream': this.RFBServerStream
+            './RFBIncomingStream': this.RFBIncomingStream
         });
 
         this.myRFB = this.MyRFB.create(this.socket);
@@ -45,8 +45,8 @@ describe('MyRFB', function () {
             done();
         });
         
-        it('should wrap socket to RFBServerStream and store the result to _serverStream property', function (done) {
-            expect(this.myRFB._serverStream).to.equal(this.serverStream);
+        it('should wrap socket to RFBIncomingStream and store the result to _incomingStream property', function (done) {
+            expect(this.myRFB._incomingStream).to.equal(this.serverStream);
             done();
         });
     });

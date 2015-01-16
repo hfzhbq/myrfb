@@ -103,15 +103,33 @@ describe('MessageFactory', function () {
                 {type: 'u8', nbytes: 'length', name: 'numbers'}
             ];
             
-            var data = {};
-            
             var MF = this.MessageFactory;
             
             MF.addPlan('custom', descr);
             
             expect( function () {
-                MF.prepareOutgoing('custom', data);
+                MF.prepareOutgoing('custom', {});
             }).to.throw('missing value for property');
+            
+            done();
+        });
+        
+        
+        it('should respect defaults', function (done) {
+            var descr = [
+                {type: 'u32', nbytes: 4, name: 'length', default: 15},
+            ];
+
+            var MF = this.MessageFactory;
+            var msg;
+
+            MF.addPlan('custom', descr);
+
+            expect( function () {
+                msg = MF.prepareOutgoing('custom', {});
+            }).to.not.throw();
+            
+            expect(msg.getProperty('length')).to.equal(15);
             
             done();
         });
