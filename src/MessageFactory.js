@@ -61,6 +61,8 @@ function checkPlan (descr) {
 
 
 function Message (planName, plan, data) {
+    // FIXME: FramebufferUpdate requires the instantiation of each Rectangle
+    // FIXME when the number of rectangles is known
     this._planPos = 0;
     this._name = planName;
     this._plan = plan;
