@@ -4,6 +4,7 @@ module.exports = function (options) {
     var MF = {};
     
     MF.prepareIncoming = sinon.stub();
+    MF.guessAndPrepareIncoming = sinon.stub();
     MF.prepareOutgoing = sinon.stub();
     
     return MF;

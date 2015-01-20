@@ -2,18 +2,22 @@ var test = require('../support/test');
 var expect = test.expect;
 
 describe('MyRFB', function () {
+    
     beforeEach( function (done) {
+        this.events = {
+            EventEmitter: test.mock('EventEmitter')
+        };
         this.socket = test.mock('socket');
-        
         this.async = test.mock('async');
-        
+
         this.MessageFactory = test.mock('MessageFactory');
-        
-        this.serverStream = test.mock('incomingStream');
+
+        this.incomingStream = test.mock('incomingStream');
         this.RFBIncomingStream = test.mock('RFBIncomingStream');
-        this.RFBIncomingStream.create.withArgs(this.socket).returns(this.serverStream);
-        
+        this.RFBIncomingStream.create.returns(this.incomingStream);
+
         this.MyRFB = test.proxyquire('../../src/MyRFB', {
+            events: this.events,
             async:  this.async,
             './MessageFactory': this.MessageFactory,
             './RFBIncomingStream': this.RFBIncomingStream
@@ -28,307 +32,362 @@ describe('MyRFB', function () {
         expect(this.MyRFB).to.exist;
         done();
     });
-
-    it('should export .create()', function (done) {
-        expect(this.MyRFB.create).to.be.a('function');
-        done();
-    });
-
-    it('should construct myRFB instance', function (done) {
-        expect(this.myRFB).to.exist;
-        done();
-    });
     
-    describe('.create(socket)', function () {
+    
+
+    describe('.create(socket, role)', function () {
+        it('should be a static method', function (done) {
+            expect(this.MyRFB.create).to.be.a('function');
+            done();
+        });
+        
+        it('should construct myRFB instancewith #_state==="handshake" that is an EventEmitter', function (done) {
+            expect(this.myRFB).to.exist;
+            expect(this.myRFB).to.be.instanceof(this.events.EventEmitter);
+            expect(this.myRFB._state).to.equal('handshake');
+            done();
+        });
+
         it('should store socket in _socket property', function (done) {
             expect(this.myRFB._socket).to.equal(this.socket);
             done();
         });
-        
+
         it('should wrap socket to RFBIncomingStream and store the result to _incomingStream property', function (done) {
-            expect(this.myRFB._incomingStream).to.equal(this.serverStream);
+            expect(this.myRFB._incomingStream).to.equal(this.incomingStream);
+            done();
+        });
+        
+        it('should pass isServer() to incoming stream constructor', function (done) {
+            this.RFBIncomingStream.create = test.sinon.stub();
+            this.MyRFB.create(this.socket, 'server');
+            
+            expect(this.RFBIncomingStream.create).calledOnce
+            .and.calledWithExactly(this.socket, true);
+            
+            this.RFBIncomingStream.create.reset();
+            this.MyRFB.create(this.socket);
+
+            expect(this.RFBIncomingStream.create).calledOnce
+            .and.calledWithExactly(this.socket, false);
+            done();
+        });
+
+        it('should throw if role is neither undefined, client nor server', function (done) {
+            var badRoles = ['polizei', {}, null, [], test.sinon.spy()];
+            var MyRFB = this.MyRFB;
+            var socket = test.mock('socket');
+
+            badRoles.forEach( function (role) {
+                expect( function () {
+                    var rfb = MyRFB.create(socket, role);
+                }).to.throw('be either "server"');
+            });
+
+            done();
+        });
+    });
+    
+    
+
+    describe('#isServer()', function () {
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.isServer).to.be.a('function');
+            done();
+        });
+
+        it('should return false by default', function (done) {
+            expect(this.myRFB.isServer()).to.be.false;
+            done();
+        });
+
+        it('should return true for protocol configured for server', function (done) {
+            var rfb = this.MyRFB.create(this.socket, 'server');
+            done();
+        });
+    });
+    
+    
+
+    describe('#send(msgName, cb)', function () {
+        beforeEach( function (done) {
+            this.msg = {
+                a:  'client message',
+                $buffer: 'a buffer',
+                toBuffer: test.sinon.stub()
+            };
+            done();
+        });
+        
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.send).to.be.a('function');
+            done();
+        });
+
+        it('should use MessageFactory to create a message', function (done) {
+            var msgName = 'a message name';
+            var cb = test.sinon.spy();
+
+            // TODO: data!!!
+            this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
+
+            this.myRFB.send(msgName, cb);
+
+            expect(this.MessageFactory.prepareOutgoing).calledOnce
+            .and.calledWithExactly(msgName);
+
+            done();
+        });
+
+        it('should pass message.toBuffer() and and cb to the socket.write', function (done) {
+            var msgName = 'a message name';
+
+            var cb = test.sinon.spy();
+
+            this.msg.toBuffer.returns(this.msg.$buffer);
+            this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
+
+            this.myRFB.send(msgName, cb);
+
+            expect(this.socket.send).calledOnce
+            .and.calledWithExactly(this.msg.$buffer, cb);
+
             done();
         });
     });
 
-    describe('myRFB', function () {
-        describe('#handshake(cb)', function () {
+    
+
+    
+    describe('#receive(msgName, cb)', function () {
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.receive).to.be.a('function');
+            done();
+        });
+
+        it('should prepare incoming message wrapper and pass it and a callback to _incomingStream.receive', function (done) {
+            var msgName = 'an incoming message name';
+            var message = {an: 'incoming message'};
+            var cb = test.sinon.spy();
+
+            this.MessageFactory.prepareIncoming.withArgs(msgName).returns(message);
+
+            this.myRFB.receive(msgName, cb);
+
+            expect(this.incomingStream.receive).calledOnce
+            .and.calledWithMatch(test.sinon.match(message), test.sinon.match.func);
+
+            done();
+        });
+        
+        it('should throw in "ready" sate', function (done) {
+            var myRFB = this.myRFB;
+            var msgName = 'an incoming message name';
+            var cb = test.sinon.spy();
+            myRFB._state = 'ready';
+            
+            expect( function () {
+                myRFB.receive(msgName, cb);
+            }).to.throw('asynchronous');
+
+            done();
+        });
+        
+        describe('the callback', function () {
+            beforeEach(function (done) {
+                var msgName = 'messageName';
+                this.message = test.mock('message');
+                this.cb = test.sinon.spy();
+                this.MessageFactory.prepareIncoming.withArgs(msgName).returns(this.message);
+                this.myRFB.emit = test.sinon.stub();
+                this.myRFB.receive(msgName, this.cb);
+                this.callback = this.incomingStream.receive.firstCall.args[1];
+                done();
+            });
+            
+            it('should emit "handshake" event in "handshake" state', function (done) {
+                this.myRFB._state = 'handshake';
+                this.callback(null, this.message);
+                
+                expect(this.myRFB.emit).calledOnce
+                .and.calledWithExactly('handshake', this.message, this.cb);
+                done();
+            });
+            
+            it('should emit "initialise" event in "initialise" state', function (done) {
+                this.myRFB._state = 'initialise';
+                this.callback(null, this.message);
+
+                expect(this.myRFB.emit).calledOnce
+                .and.calledWithExactly('initialise', this.message, this.cb);
+                done();
+            });
+        });
+    });
+
+
+    
+    
+    describe('#authenticate(cb)', function () {
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.authenticate).to.be.a('function');
+            done();
+        });
+        
+        it('should simply call the callback', function (done) {
+            var cb = test.sinon.spy();
+            this.myRFB.authenticate(cb);
+            expect(cb).calledOnce.and.calledWithExactly(null);
+            done();
+        });
+        
+        it.skip('should handle authentication', function (done) {
+            
+            done();
+        });
+
+    });
+    
+    
+    
+    describe('#handshake(cb)', function () {
+        beforeEach( function (done) {
+            this.myRFB.send = test.sinon.stub();
+            this.myRFB.receive = test.sinon.stub();
+            this.myRFB.authenticate = test.sinon.stub();
+
+            done();
+        });
+        
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.handshake).to.be.a('function');
+            done();
+        });
+        
+        it('should start waterfall(tasks, handler)', function (done) {
+            var cb = test.sinon.spy();
+            this.myRFB.handshake(cb);
+
+            expect(this.async.waterfall).calledOnce
+            .and.calledWithMatch(test.sinon.match.array, test.sinon.match.func);
+            done();
+        });
+        
+        describe('the waterfall handler(err)', function () {
             beforeEach( function (done) {
-                this.myRFB.send = test.sinon.stub();
-                this.myRFB.receive = test.sinon.stub();
-                this.myRFB.authenticate = test.sinon.stub();
-
-                done();
-            });
-            it('should be an instance method', function (done) {
-                expect(this.myRFB.handshake).to.be.a('function');
+                this.cb = test.sinon.spy();
+                this.myRFB.handshake(this.cb);
+                this.handler = this.async.waterfall.firstCall.args[1];
                 done();
             });
 
-            it('should start waterfall(tasks, handler)', function (done) {
-                var cb = test.sinon.spy();
-                this.myRFB.handshake(cb);
-
-                expect(this.async.waterfall).calledOnce
-                .and.calledWithMatch(test.sinon.match.array, test.sinon.match.func);
+            it('should pass err to the callback', function (done) {
+                var error = {an: 'error'};
+                this.handler(error);
+                expect(this.cb).calledOnce
+                .and.calledWithExactly(error);
                 done();
             });
 
-            describe('tasks', function () {
-                beforeEach( function (done) {
-                    this.cb = test.sinon.spy();
-                    this.myRFB.handshake(this.cb);
-                    this.tasks = this.async.waterfall.firstCall.args[0];
-                    done();
-                });
-
-                it('should 1) receive Version message', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[0](cb);
-
-                    expect(this.myRFB.receive).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly('Version', cb);
-
-                    done();
-                });
-
-                it('should 2) send Version message', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[1](cb);
-
-                    expect(this.myRFB.send).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly('Version', cb);
-
-                    done();
-                });
-
-                it('should 3) receive the list of security methods supported by server', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[2](cb);
-
-                    expect(this.myRFB.receive).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly('SecurityTypes', cb);
-                    done();
-                });
-
-                it('should 4) send security type message', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[3](cb);
-
-                    expect(this.myRFB.send).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly('SecurityType', cb);
-
-
-                    done();
-                });
-
-                it('should 5) run authentication process', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[4](cb);
-
-                    expect(this.myRFB.authenticate).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly(cb);
-
-                    done();
-                });
-
-                it('should 6) receive security result message', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[5](cb);
-
-                    expect(this.myRFB.receive).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly('SecurityResult', cb);
-                    done();
-                });
-
-                it('should do only 6 above mentioned things', function (done) {
-                    expect(this.tasks).to.have.length(6);
-                    done();
-                });
-            });
-
-            describe('handler(err)', function () {
-                beforeEach( function (done) {
-                    this.cb = test.sinon.spy();
-                    this.myRFB.handshake(this.cb);
-                    this.handler = this.async.waterfall.firstCall.args[1];
-                    done();
-                });
-
-                it('should pass err to the callback', function (done) {
-                    var error = {an: 'error'};
-                    this.handler(error);
-                    expect(this.cb).calledOnce
-                    .and.calledWithExactly(error);
-                    done();
-                });
+            it('should set #_state to "initialise" on success', function (done) {
+                expect(this.myRFB._state).to.equal('handshake');
+                this.handler(null);
+                expect(this.myRFB._state).to.equal('initialise');
+                done();
             });
         });
 
+    });
+    
+    
+    
+    describe('#initialise(cb)', function () {
+        beforeEach( function (done) {
+            this.myRFB.send = test.sinon.stub();
+            this.myRFB.receive = test.sinon.stub();
+            done();
+        });
 
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.initialise).to.be.a('function');
+            done();
+        });
 
-
-        describe('#initialise(cb)', function () {
+        it('should start waterfall(tasks, handler)', function (done) {
+            var cb = test.sinon.spy();
+            this.myRFB.initialise(cb);
+            expect(this.async.waterfall).calledOnce
+            .and.calledWithMatch(test.sinon.match.array, test.sinon.match);
+            done();
+        });
+        
+        describe('the waterfall handler(err)', function () {
             beforeEach( function (done) {
-                this.myRFB.send = test.sinon.stub();
-                this.myRFB.receive = test.sinon.stub();
+                this.cb = test.sinon.spy();
+                this.myRFB._state = 'initialise';
+                this.myRFB.initialise(this.cb);
+                this.handler = this.async.waterfall.firstCall.args[1];
                 done();
             });
 
-            it('should be an instance method', function (done) {
-                expect(this.myRFB.initialise).to.be.a('function');
+            it('should pass an error to the callback', function (done) {
+                var error = {an: 'error'};
+                this.handler(error);
+                expect(this.cb).calledOnce
+                .and.calledWithExactly(error);
                 done();
             });
 
-            it('should start waterfall(tasks, handler)', function (done) {
-                var cb = test.sinon.spy();
-                this.myRFB.initialise(cb);
-                expect(this.async.waterfall).calledOnce
-                .and.calledWithMatch(test.sinon.match.array, test.sinon.match);
+            it('should set #_state to "ready"', function (done) {
+                expect(this.myRFB._state).to.equal('initialise');
+                this.handler(null);
+                expect(this.myRFB._state).to.equal('ready');
                 done();
             });
             
-            
-            describe('tasks', function () {
-                beforeEach( function (done) {
-                    this.cb = test.sinon.spy();
-                    this.myRFB.initialise(this.cb);
-                    this.tasks = this.async.waterfall.firstCall.args[0];
-                    done();
-                });
+            it('should set the incoming stream to asynchronous mode, passing wrapped #onAsyncMessage()', function (done) {
+                var err = {an: 'error'};
+                var msg = {a: 'msg'};
                 
-                it('should 1) send ClientInit message', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[0](cb);
-                    expect(this.myRFB.send).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly('ClientInit', cb);
-                    done();
-                });
+                this.myRFB.onAsyncMessage = test.sinon.spy();
                 
-                it('should 2) receive ServerInit message', function (done) {
-                    var cb = test.sinon.spy();
-                    this.tasks[1](cb);
-                    expect(this.myRFB.receive).calledOnce
-                    .and.calledOn(this.myRFB)
-                    .and.calledWithExactly('ServerInit', cb);
-                    done();
-                });
+                expect(this.incomingStream.setAsyncMode).not.called;
+                this.handler(null);
                 
-                it('should contain only above mentioned tasks', function (done) {
-                    expect(this.tasks).to.have.length(2);
-                    done();
-                });
+                expect(this.incomingStream.setAsyncMode).calledOnce
+                .and.calledWithMatch(test.sinon.match.func);
+                
+                this.incomingStream.setAsyncMode.firstCall.args[0](err, msg);
+                
+                expect(this.myRFB.onAsyncMessage).calledOnce
+                .and.calledOn(this.myRFB)
+                .and.calledWithExactly(err, msg);
+                
+                done();
             });
-            
-            describe('handler(err)', function () {
-                beforeEach( function (done) {
-                    this.cb = test.sinon.spy();
-                    this.myRFB.initialise(this.cb);
-                    this.handler = this.async.waterfall.firstCall.args[1];
-                    done();
-                });
-                
-                it('should pass an error to the callback', function (done) {
-                    var error = {an: 'error'};
-                    this.handler(error);
-                    expect(this.cb).calledOnce
-                    .and.calledWithExactly(error);
-                    done();
-                });
-                
-                it.skip('should set an asynchtonous mode on a read stream', function (done) {
-                    done();
-                });
-            });
+
         });
 
-
-        describe('#send(msgName, cb)', function () {
-            beforeEach( function (done) {
-                this.msg = {
-                    a:  'client message',
-                    $buffer: 'a buffer',
-                    toBuffer: test.sinon.stub()
-                };
-                done();
-            });
-            it('should be an instance method', function (done) {
-                expect(this.myRFB.send).to.be.a('function');
-                done();
-            });
-            
-            it('should use MessageFactory to create a message', function (done) {
-                var msgName = 'a message name';
-                var cb = test.sinon.spy();
-                
-                // TODO: data!!!
-                this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
-                
-                this.myRFB.send(msgName, cb);
-                
-                expect(this.MessageFactory.prepareOutgoing).calledOnce
-                .and.calledWithExactly(msgName);
-                
-                done();
-            });
-            
-            it('should pass message.toBuffer() and and cb to the socket.write', function (done) {
-                var msgName = 'a message name';
-                                
-                var cb = test.sinon.spy();
-                
-                this.msg.toBuffer.returns(this.msg.$buffer);
-                this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
-                
-                this.myRFB.send(msgName, cb);
-                
-                expect(this.socket.send).calledOnce
-                .and.calledWithExactly(this.msg.$buffer, cb);
-                
-                done();
-            });
+    });
+    
+    
+    describe('#onAsyncMessage()', function () {
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.onAsyncMessage).to.be.a('function');
+            done();
         });
-
-
-        describe('#receive(msgName, cb)', function () {
-            it('should be an instance method', function (done) {
-                expect(this.myRFB.receive).to.be.a('function');
-                done();
-            });
+        
+        it('should emit "message" event', function (done) {
+            var error = null;
+            var message = {a: 'message'};
             
-            it('should prepare incoming message wrapper and pass it and cb to _serverStream.receive', function (done) {
-                var msgName = 'an incoming message name';
-                var message = {an: 'incoming message'};
-                var cb = test.sinon.spy();
-                
-                this.MessageFactory.prepareIncoming.withArgs(msgName).returns(message);
-                
-                this.myRFB.receive(msgName, cb);
-                
-                expect(this.serverStream.receive).calledOnce
-                .and.calledWithExactly(message, cb);
-                
-                done();
-            });
+            this.myRFB.emit = test.sinon.spy();
+            
+            this.myRFB.onAsyncMessage(error, message);
+            
+            expect(this.myRFB.emit).calledOnce
+            .and.calledWithExactly('message', message);
+            done();
         });
-
-
-        describe.skip('#authenticate(cb)', function () {
-            it('should be an instance method', function (done) {
-                expect(this.myRFB.authenticate).to.be.a('function');
-                done();
-            });
-            
-            
-        });
-
-
     });
 });

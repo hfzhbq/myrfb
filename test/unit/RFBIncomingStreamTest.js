@@ -5,10 +5,13 @@ describe('RFBIncomingStream', function () {
     beforeEach(function (done) {
         this.socket = test.mock('socket');
         this.msg = test.mock('message');
+        this.MessageFactory = test.mock('MessageFactory');
+        
         this.RFBIncomingStream = test.proxyquire('../../src/RFBIncomingStream', {
+            './MessageFactory': this.MessageFactory
         });
         
-        this.serverStream = this.RFBIncomingStream.create(this.socket);
+        this.incomingStream = this.RFBIncomingStream.create(this.socket);
         done();
     });
     
@@ -20,18 +23,30 @@ describe('RFBIncomingStream', function () {
     it('should export RFBIncomingStream constructor', function (done) {
         var constr = this.RFBIncomingStream.RFBIncomingStream;
         expect(constr).to.exist;
-        expect(this.serverStream).to.be.instanceof(constr);
+        expect(this.incomingStream).to.be.instanceof(constr);
         done();
     });
     
-    describe('.create(socket)', function () {
+    describe('.create(socket, isServer)', function () {
         beforeEach(function (done) {
-            this.serverStream.addChunk = test.sinon.spy();
+            this.incomingStream.addChunk = test.sinon.spy();
             done();
         });
         
         it('should be a static method', function (done) {
             expect(this.RFBIncomingStream.create).to.be.a('function');
+            done();
+        });
+        
+        it('should throw if incorrect isServer argument is provided', function (done) {
+            var badIsServers = ['polizei', [], {}, test.sinon.spy(), null];
+            var _this = this;
+            badIsServers.forEach( function (isServer) {
+                expect( function () {
+                    _this.RFBIncomingStream.create(_this.socket, isServer);
+                }).to.throw('isServer');
+            });
+            
             done();
         });
         
@@ -41,12 +56,19 @@ describe('RFBIncomingStream', function () {
             done();
         });
         
+        
+        it('should set #_mode to "sync"', function (done) {
+            expect(this.incomingStream._mode).to.equal('sync');
+            done();
+        });
+        
+        
         describe('listener', function () {
             beforeEach(function (done) {
                 this.addChunkSpy = test.sinon.spy();
                 this.socket = test.mock('socket');
                 this.RFBIncomingStream.RFBIncomingStream.prototype.addChunk = this.addChunkSpy;
-                this.serverStream = this.RFBIncomingStream.create(this.socket);
+                this.incomingStream = this.RFBIncomingStream.create(this.socket);
                 
                 this.listener = test.findCallWith(this.socket.on, 'data').args[1];
                 
@@ -55,14 +77,14 @@ describe('RFBIncomingStream', function () {
             
             it('should call #addChunk()', function (done) {
                 var buf = new Buffer('any');
-                var spy = this.serverStream.addChunk;
+                var spy = this.incomingStream.addChunk;
                 
                 expect(spy).notCalled;
                 
                 this.listener(buf);
                 
                 expect(spy).calledOnce
-                .and.calledOn(this.serverStream)
+                .and.calledOn(this.incomingStream)
                 .and.calledWithExactly(buf);
                 
                 done();
@@ -71,18 +93,114 @@ describe('RFBIncomingStream', function () {
     });
     
     
+    
+    describe('#isServer()', function () {
+        it('should be an instance method', function (done) {
+            expect(this.incomingStream.isServer).to.be.a('function');
+            done();
+        });
+        
+        it('should return true for server\s incoming stream', function (done) {
+            var is = this.RFBIncomingStream.create(this.socket, true);
+            expect(is.isServer()).to.be.true;
+            
+            is = this.RFBIncomingStream.create(this.socket, false);
+            expect(is.isServer()).to.be.false;
+            done();
+        });
+        
+        it('should return false if isServer is undefined', function (done) {
+            var is = this.RFBIncomingStream.create(this.socket);
+            expect(is.isServer()).to.be.false;
+            done();
+        });
+        
+        it('should return true or false if "server" or "client" were passed to the constructor', function (done) {
+            var is = this.RFBIncomingStream.create(this.socket, 'client');
+            expect(is.isServer()).to.be.false;
+            
+            is = this.RFBIncomingStream.create(this.socket, 'server');
+            expect(is.isServer()).to.be.true;
+            done();
+        });
+    });
+    
+    
+    
+    describe('#setAsyncMode(listener)', function () {
+        beforeEach(function (done) {
+            this.incomingStream.processHeadRequest = test.sinon.spy();
+            done();
+        });
+        
+        it('should be an instance method', function (done) {
+            expect(this.incomingStream.setAsyncMode).to.be.a('function');
+            done();
+        });
+        
+        it('should set #_mode to "async"', function (done) {
+            expect(this.incomingStream._mode).to.not.equal('async');
+            this.incomingStream.setAsyncMode();
+            expect(this.incomingStream._mode).to.equal('async');
+            done();
+        });
+        
+        it('should throw if requests queue is not empty', function (done) {
+            var is = this.incomingStream;
+            is._requests = [{}];
+            
+            expect( function () {
+                is.setAsyncMode();
+            }).to.throw('should be empty');
+            
+            done();
+        });
+        
+        it('should reassign listener in "async" mode', function (done) {
+            var is = this.incomingStream;
+            var listener = test.sinon.spy();
+            is._mode = 'async';
+            is._requests = [{}];
+
+            expect( function () {
+                is.setAsyncMode(listener);
+                expect(is.processHeadRequest).to.not.called;
+                expect(is._asyncListener).to.equal(listener);
+            }).to.not.throw();
+
+            done();
+        });
+        
+        it('should call #processHeadRequest', function (done) {
+            expect(this.incomingStream.processHeadRequest).to.not.called;
+            this.incomingStream.setAsyncMode();
+            expect(this.incomingStream.processHeadRequest).calledOnce;
+            done();
+        });
+        
+        it('should assign listener to #_asyncListener', function (done) {
+            var listener = test.sinon.spy();
+            this.incomingStream.setAsyncMode(listener);
+            expect(this.incomingStream._asyncListener).to.equal(listener);
+            done();
+        });
+    });
+    
+    
+    
+    
     describe('#buffer()', function () {
         it('should be an instance method', function (done) {
-            expect(this.serverStream.buffer).to.be.a('function');
+            expect(this.incomingStream.buffer).to.be.a('function');
             done();
         });
         
         it('should return an internal buffer by default', function (done) {
             var buf = new Buffer('any');
 
-            this.serverStream.addChunk(buf);
+            this.incomingStream.addChunk(buf);
             
-            expect(this.serverStream.buffer().toString('hex'))
+            expect(this.incomingStream.buffer().toString('hex'))
             .to.equal(buf.toString('hex'));
             
             done();
@@ -91,16 +209,16 @@ describe('RFBIncomingStream', function () {
     
     describe('#bufferedOctetsCount()', function () {
         it('should be an instance method', function (done) {
-            expect(this.serverStream.bufferedOctetsCount).to.be.a('function');
+            expect(this.incomingStream.bufferedOctetsCount).to.be.a('function');
             done();
         });
         
         it('should return the length of internal buffer', function (done) {
             var length = 12;
             
-            this.serverStream.addChunk( new Buffer(length) );
+            this.incomingStream.addChunk( new Buffer(length) );
             
-            expect(this.serverStream.bufferedOctetsCount()).to.equal(length);
+            expect(this.incomingStream.bufferedOctetsCount()).to.equal(length);
             
             done();
         });
@@ -109,7 +227,7 @@ describe('RFBIncomingStream', function () {
     
     describe('#receive(msg, cb)', function () {
         it('should be an instance method', function (done) {
-            expect(this.serverStream.receive).to.be.a('function');
+            expect(this.incomingStream.receive).to.be.a('function');
             done();
         });
         
@@ -118,23 +236,23 @@ describe('RFBIncomingStream', function () {
             
             expect(this._requests).to.have.length[0];
             
-            this.serverStream.receive(this.msg, cb);
+            this.incomingStream.receive(this.msg, cb);
             
-            expect(this.serverStream._requests[0]).to.have.property('msg').that.equals(this.msg);
-            expect(this.serverStream._requests[0]).to.have.property('cb').that.equals(cb);
+            expect(this.incomingStream._requests[0]).to.have.property('msg').that.equals(this.msg);
+            expect(this.incomingStream._requests[0]).to.have.property('cb').that.equals(cb);
             
             done();
         });
         
         it('should call #processHeadRequest()', function (done) {
             var cb = test.sinon.spy();
-            test.sinon.spy(this.serverStream, 'processHeadRequest');
+            test.sinon.spy(this.incomingStream, 'processHeadRequest');
             
-            this.serverStream.receive(this.msg, cb);
+            this.incomingStream.receive(this.msg, cb);
             
-            expect( this.serverStream.processHeadRequest ).calledOnce;
+            expect( this.incomingStream.processHeadRequest ).calledOnce;
             
-            this.serverStream.processHeadRequest.restore();
+            this.incomingStream.processHeadRequest.restore();
             
             done();
         });
@@ -144,7 +262,7 @@ describe('RFBIncomingStream', function () {
     
     describe('#addChunk(chunk)', function () {
         it('should be an instance method', function (done) {
-            expect(this.serverStream.addChunk).to.be.a('function');
+            expect(this.incomingStream.addChunk).to.be.a('function');
             done();
         });
         
@@ -154,9 +272,9 @@ describe('RFBIncomingStream', function () {
             var expected = b1.toString('hex') + b2.toString('hex');
             var actual;
             
-            this.serverStream.addChunk(b1);
-            this.serverStream.addChunk(b2);
-            actual = this.serverStream.buffer().toString('hex');
+            this.incomingStream.addChunk(b1);
+            this.incomingStream.addChunk(b2);
+            actual = this.incomingStream.buffer().toString('hex');
             
             expect(actual).to.equal(expected);
             
@@ -166,13 +284,13 @@ describe('RFBIncomingStream', function () {
         it('should call #processHeadRequest()', function (done) {
             var buf = new Buffer('any');
             
-            test.sinon.spy(this.serverStream, 'processHeadRequest');
+            test.sinon.spy(this.incomingStream, 'processHeadRequest');
 
-            this.serverStream.addChunk(buf);
+            this.incomingStream.addChunk(buf);
 
-            expect( this.serverStream.processHeadRequest ).calledOnce;
+            expect( this.incomingStream.processHeadRequest ).calledOnce;
 
-            this.serverStream.processHeadRequest.restore();
+            this.incomingStream.processHeadRequest.restore();
             done();
         });
     });
@@ -181,7 +299,7 @@ describe('RFBIncomingStream', function () {
     
     describe('#detachChunk(length)', function () {
         it('should be an instance method', function (done) {
-            expect(this.serverStream.detachChunk).to.be.a('function');
+            expect(this.incomingStream.detachChunk).to.be.a('function');
             done();
         });
         
@@ -189,9 +307,9 @@ describe('RFBIncomingStream', function () {
             var buf = new Buffer('any');
             var res;
             
-            this.serverStream.addChunk(buf);
+            this.incomingStream.addChunk(buf);
             
-            res = this.serverStream.detachChunk(1+buf.length);
+            res = this.incomingStream.detachChunk(1+buf.length);
             
             expect(res).to.be.null;
             
@@ -202,12 +320,12 @@ describe('RFBIncomingStream', function () {
             var buf = new Buffer('any data');
             var res;
             
-            this.serverStream.addChunk(buf);
+            this.incomingStream.addChunk(buf);
             
-            var res = this.serverStream.detachChunk(buf.length);
+            var res = this.incomingStream.detachChunk(buf.length);
             
             expect(res.toString('hex')).to.equal(buf.toString('hex'));
-                expect(this.serverStream.buffer().length).to.equal(0);
+                expect(this.incomingStream.buffer().length).to.equal(0);
             
             done();
         });
@@ -220,14 +338,71 @@ describe('RFBIncomingStream', function () {
             var tail = new Buffer( data.substr(length) );
             var res;
             
-            this.serverStream.addChunk(buf);
-            res = this.serverStream.detachChunk(length);
+            this.incomingStream.addChunk(buf);
+            res = this.incomingStream.detachChunk(length);
             
             expect(res.toString('hex'))
             .to.equal(head.toString('hex'));
-            expect(this.serverStream.buffer().toString('hex'))
+            expect(this.incomingStream.buffer().toString('hex'))
             .to.equal(tail.toString('hex'));
                 
+            done();
+        });
+    });
+    
+    
+    
+    describe('#checkAsyncMessage()', function () {
+        beforeEach(function (done) {
+            this.incomingStream._mode = 'async';
+            this.incomingStream.buffer = test.sinon.stub();
+            this.incomingStream.isServer = test.sinon.stub();
+            done();
+        });
+        it('should be an instance method', function (done) {
+            expect(this.incomingStream.checkAsyncMessage).to.be.a('function');
+            done();
+        });
+        
+        it('should do nothing in "sync" mode', function (done) {
+            this.incomingStream._mode = 'sync';
+            
+            this.incomingStream.checkAsyncMessage();
+
+            expect(this.MessageFactory.guessAndPrepareIncoming).not.called;
+            
+            done();
+        });
+        
+        it('should do nothing if buffer is empty', function (done) {
+            this.incomingStream.buffer.returns( new Buffer(0) );
+            this.incomingStream.checkAsyncMessage();
+            expect(this.MessageFactory.guessAndPrepareIncoming).not.called;
+            done();
+        });
+        
+        it('should use MessageFactory.guessAndPrepareIncoming(buffer.readUInt8(0), isServer) and add the message to the queue', function (done) {
+            var messageType = 11;
+            var isServer = 'boolean value';
+            var message = {a: 'message'};
+            
+            var buf = new Buffer(10);
+            buf.writeUInt8(messageType, 0);
+            
+            this.incomingStream.buffer.returns(buf);
+            this.incomingStream.isServer.returns(isServer);
+            this.MessageFactory.guessAndPrepareIncoming.withArgs(messageType, isServer).returns(message);
+            
+            expect(this.incomingStream._requests).to.have.length(0);
+            
+            var res = this.incomingStream.checkAsyncMessage();
+            
+            expect(this.MessageFactory.guessAndPrepareIncoming).calledOnce
+            .and.calledWithExactly(messageType, isServer);
+            
+            expect(this.incomingStream._requests).to.have.length(1);
+            expect(this.incomingStream._requests[0]).to.have.property('msg').that.equals(message);
+            
             done();
         });
     });
@@ -241,16 +416,28 @@ describe('RFBIncomingStream', function () {
         });
         
         it('should be an instance method', function (done) {
-            expect(this.serverStream.processHeadRequest).to.be.a('function');
+            expect(this.incomingStream.processHeadRequest).to.be.a('function');
             done();
         });
         
-        it('should do nothing if the tasks list is empty', function (done) {
-            var ss = this.serverStream;
+        it('should do nothing if the requests list is empty in "sync" mode', function (done) {
+            var ss = this.incomingStream;
             
             expect( function () {
                 ss.processHeadRequest();
             }).to.not.throw(Error);
+            
+            done();
+        });
+        
+        it('should checkAsyncMessage if the requests list is empty in "async" mode', function (done) {
+            this.incomingStream.checkAsyncMessage = test.sinon.spy();
+            this.incomingStream._mode = 'async';
+            this.incomingStream._requests = [];
+            
+            this.incomingStream.processHeadRequest();
+            
+            expect(this.incomingStream.checkAsyncMessage).calledOnce;
             
             done();
         });
@@ -260,16 +447,16 @@ describe('RFBIncomingStream', function () {
             var availableLength= requiredLength - 1;
             
             this.msg.requiredLength.returns(requiredLength);
-            this.serverStream.detachChunk = test.sinon.spy();
+            this.incomingStream.detachChunk = test.sinon.spy();
             
             var buf = new Buffer(availableLength);
             
-            this.serverStream.receive(this.msg, this.cb);
-            this.serverStream.addChunk(buf); // calls #processHeadRequest()
+            this.incomingStream.receive(this.msg, this.cb);
+            this.incomingStream.addChunk(buf); // calls #processHeadRequest()
             
             expect(this.msg.requiredLength).calledTwice;
             expect(this.msg.addChunk).not.called;
-            expect(this.serverStream.detachChunk).not.called;
+            expect(this.incomingStream.detachChunk).not.called;
             
             done();
         });
@@ -280,13 +467,13 @@ describe('RFBIncomingStream', function () {
             
             this.msg.requiredLength.onCall(0).returns(requiredLength);
             this.msg.requiredLength.onCall(1).returns(0);
-            this.serverStream.detachChunk = test.sinon.stub().returns(chunk);
+            this.incomingStream.detachChunk = test.sinon.stub().returns(chunk);
 
             var buf = new Buffer(requiredLength);
 
-            this.serverStream.receive(this.msg, this.cb);
+            this.incomingStream.receive(this.msg, this.cb);
             this.msg.requiredLength.reset();
-            this.serverStream.addChunk(buf); // calls #processHeadRequest()
+            this.incomingStream.addChunk(buf); // calls #processHeadRequest()
 
             expect(this.msg.requiredLength).calledTwice;
             expect(this.msg.addChunk).calledOnce
@@ -296,7 +483,7 @@ describe('RFBIncomingStream', function () {
         
         it('should feed msg unless it is satisfied (given enough data)', function (done) {
             var msg = this.msg;
-            var ss = this.serverStream;
+            var ss = this.incomingStream;
             var lengths = [3, 15, 22, 0];
             var chunks = [];
             var total = 0;
@@ -314,9 +501,9 @@ describe('RFBIncomingStream', function () {
                 }
             });
             
-            this.serverStream.receive(this.msg, this.cb);
+            this.incomingStream.receive(this.msg, this.cb);
             msg.requiredLength.reset();
-            this.serverStream.addChunk( new Buffer(1+total) );
+            this.incomingStream.addChunk( new Buffer(1+total) );
             
             expect(msg.addChunk).to.have.callCount(lengths.length-1);
             
@@ -328,16 +515,29 @@ describe('RFBIncomingStream', function () {
             
             expect(this.cb).not.called;
             
-            this.serverStream.receive(this.msg, this.cb);
+            this.incomingStream.receive(this.msg, this.cb);
             
             expect(this.cb).calledOnce
             .and.calledWithExactly(null, this.msg);
             
             this.cb.reset();
-            this.serverStream.processHeadRequest();
+            this.incomingStream.processHeadRequest();
             
             expect(this.cb).not.called;
             
+            done();
+        });
+        
+        it('should pass msg to #_asyncListener in "async" mode', function (done) {
+            this.msg.requiredLength.returns(0);
+            this.incomingStream._mode = 'async';
+            this.incomingStream._asyncListener = test.sinon.spy();
+
+            this.incomingStream.receive(this.msg);
+
+            expect(this.incomingStream._asyncListener).calledOnce
+            .and.calledWithExactly(null, this.msg);
+
             done();
         });
         
@@ -347,10 +547,10 @@ describe('RFBIncomingStream', function () {
             this.msg.requiredLength.onCall(0).returns(rl1);
             this.msg.requiredLength.onCall(1).returns(rl2);
             
-            this.serverStream.receive(this.msg, this.cb);
+            this.incomingStream.receive(this.msg, this.cb);
             this.msg.requiredLength.reset();
             
-            this.serverStream.addChunk( new Buffer(rl1 + rl2 + rl3 - 1) );
+            this.incomingStream.addChunk( new Buffer(rl1 + rl2 + rl3 - 1) );
             
             expect(this.cb).not.called;
             expect(this.msg.addChunk).calledTwice;

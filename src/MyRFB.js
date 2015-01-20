@@ -1,43 +1,104 @@
+var util = require('util');
+var EventEmitter = require('events').EventEmitter;
+
 var async = require('async');
 
 var RFBIncomingStream = require('./RFBIncomingStream');
 var MessageFactory = require('./MessageFactory');
 
-function MyRFB (socket) {
+var ROLES = ['server', 'client'];
+
+// who sends the message
+var HANDSHAKE = [
+    {role: 'server', msg: 'Version' },
+    {role: 'client', msg: 'Version' },
+    {role: 'server', msg: 'SecurityTypes' },
+    {role: 'client', msg: 'SecurityType' },
+    'authenticate',
+    {role: 'server', msg: 'SecurityResult' }
+];
+
+var INIT = [
+    {role: 'client', msg: 'ClientInit'},
+    {role: 'server', msg: 'ServerInit'}
+];
+
+util.inherits(MyRFB, EventEmitter);
+
+function MyRFB (socket, role) {
+    EventEmitter.call(this);
     this._socket = socket;
-    this._incomingStream = RFBIncomingStream.create(socket);
+    this._setRole(role);
+    this._incomingStream = RFBIncomingStream.create(socket, this.isServer());
+    this._state = 'handshake';
 }
 
 
 var p = MyRFB.prototype;
 
+p._setRole = function (role) {
+
+    if ( typeof role === 'string' && ROLES.indexOf(role) !== -1) {
+        this._role = role;
+        return;
+    }
+
+    if ( typeof role === 'undefined' ) {
+        this._role = 'client';
+        return;
+    }
+
+    throw Error('Role must be either "server" or "client" or undefined');
+};
+
+p.isServer = function isServer () {
+    return this._role === 'server';
+};
+
 p.handshake = function handshake (cb) {
-    var tasks = [
-        this.receive.bind(this, 'Version'),
-        this.send.bind(this, 'Version'),
-        this.receive.bind(this, 'SecurityTypes'),
-        this.send.bind(this, 'SecurityType'),
-        this.authenticate.bind(this),
-        this.receive.bind(this, 'SecurityResult')
-    ];
+    var tasks = HANDSHAKE.map( this._getStage.bind(this) );
+    var _this = this;
     
     async.waterfall(tasks, function (err) {
+        if ( ! err ) {
+            _this._state = 'initialise';
+        }
         cb(err);
     });
 };
 
 
 p.initialise = function initialise (cb) {
-    var tasks = [
-        this.send.bind(this, 'ClientInit'),
-        this.receive.bind(this, 'ServerInit')
-    ];
+    var tasks = INIT.map( this._getStage.bind(this) );
+    var _this = this;
     
     async.waterfall(tasks, function (err) {
+        if ( !err ) {
+            _this._state = 'ready';
+            _this._incomingStream.setAsyncMode(_this.onAsyncMessage.bind(_this));
+        }
         cb(err);
     });
 };
 
+p.onAsyncMessage = function (error, message) {
+    this.emit('message', message);
+};
+
+
+p._getStage = function _getStage (stage) {
+    if ( typeof stage === 'string' && stage === 'authenticate' ) {
+        return this.authenticate.bind(this);
+    }
+
+    var sr = stage.role === 'server';
+
+    // isServer (xor) sr
+    var method = (this.isServer() ? sr : !sr ) ?
+        'send' : 'receive';
+
+    return this[method].bind(this, stage.msg);
+}
 
 p.send = function send (msgName, cb) {
     // FIXME: data to prepare an outcoming message ???
@@ -46,12 +107,23 @@ p.send = function send (msgName, cb) {
 };
 
 p.receive = function receive (msgName, cb) {
+    if ( this._state === 'ready' ) {
+        throw Error('call to #receive() is illegal in asynchronous mode');
+    }
     var msg = MessageFactory.prepareIncoming(msgName);
-    this._incomingStream.receive(msg, cb);
+    var _this = this;
+    
+    this._incomingStream.receive(msg, function (error, message) {
+        _this.emit(_this._state, message, cb);
+    });
 };
 
-function create (socket) {
-    return new MyRFB(socket);
+p.authenticate = function authenticate (cb) {
+    cb(null);
+};
+
+function create (socket, role) {
+    return new MyRFB(socket, role);
 }
 
 module.exports = {
