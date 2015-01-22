@@ -1,3 +1,4 @@
+// FIXME: this is deprecated!
 module.exports = [{
     name:   'messageType',
     type:   'u8',
@@ -14,6 +15,4 @@ module.exports = [{
     name:   'rectangles',
     type:   'rectangle',
     nbytes: 'numberOfRectangles'
-}
-    // FIXME: here come pixel data that are encoding-dependent!!!
-                 ];
+}];

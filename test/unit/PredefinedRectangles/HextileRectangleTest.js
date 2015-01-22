@@ -34,6 +34,17 @@ describe('Hextile rectangle', function () {
         expect(this.hextile.bottomHeight).to.equal(8);
         done();
     });
+    
+    it('should correctlyset rightWidth and bottomHeight for sizes that are multiple of 16', function (done) {
+        this.reqHead.width = 64;
+        this.reqHead.height = 64;
+        var hextile = PR.create(this.reqHead);
+        
+        expect(hextile.bottomHeight).to.equal(16);
+        expect(hextile.rightWidth).to.equal(16);
+        
+        done();
+    });
 
     describe('#encodingType()', function () {
         it('should return "Hextile"', function (done) {
@@ -116,11 +127,11 @@ describe('Hextile rectangle', function () {
                 done();
             });
             
-            it('should return _numberOfSubrectangles * (4+bytesPerPixel) in subtiles mode if SubrectsColoured', function (done) {
+            it('should return _numberOfSubrectangles * (2+bytesPerPixel) in subtiles mode if SubrectsColoured', function (done) {
                 this.hextile._state = 'subtiles';
                 this.hextile._subencodingMask = 24;
                 this.hextile._numberOfSubrectangles = 4;
-                expect(this.hextile.requiredLength()).to.equal((4+this.hextile.bytesPerPixel)*this.hextile._numberOfSubrectangles);
+                expect(this.hextile.requiredLength()).to.equal((2+this.hextile.bytesPerPixel)*this.hextile._numberOfSubrectangles);
 
                 done();
             });
@@ -156,7 +167,7 @@ describe('Hextile rectangle', function () {
         beforeEach(function (done) {
             this.tileHead = function (subencoding) {
                 var buf = new Buffer(1);
-                subencoding = subencoding || 1;
+                subencoding = typeof subencoding === 'undefined' ? 1 : subencoding;
                 buf.writeUInt8(subencoding, 0);
                 return buf;
             };
@@ -178,6 +189,19 @@ describe('Hextile rectangle', function () {
                 expect(this.hextile._state).to.equal('tileBody');
                 done();
             });
+            
+            it('should skip to the next tile for subencodingMask === 0', function (done) {
+                var chunk = this.tileHead(0);
+                this.hextile._state = 'tileHead';
+                this.hextile.nextTile = test.sinon.spy();
+                
+                this.hextile.addChunk(chunk)
+                
+                expect(this.hextile.nextTile).calledOnce;
+                expect(this.hextile._state).to.equal('tileHead');
+                
+                done();
+            });
         });
         
         describe('tileBody state', function () {
@@ -197,17 +221,17 @@ describe('Hextile rectangle', function () {
             
             it('should set _numberOfSubrectangles, push chunk to data, set _state to subtiles if AnySubrects', function (done) {
                 var nsr = 11;
-                var chunk = new Buffer(1);
-                chunk.writeUInt8(nsr, 0);
+                var chunk = new Buffer(5);
+                chunk.writeUInt8(nsr, 4);
                 
                 this.hextile._state = 'tileBody';
-                this.hextile._subencodingMask = 24;
+                this.hextile._subencodingMask = 26;
                 
                 this.hextile.addChunk(chunk);
                 
-                expect(this.hextile._numberOfSubrectangles).to.equal(nsr);
                 expect(this.hextile.data).to.contain(chunk);
                 expect(this.hextile._state).to.equal('subtiles');
+                expect(this.hextile._numberOfSubrectangles).to.equal(nsr);
                 
                 done();
             });
@@ -263,6 +287,28 @@ describe('Hextile rectangle', function () {
             
             expect(this.hextile._state).to.equal('ready');
             
+            done();
+        });
+        
+        
+        it('should set #_subencodingMask and #_numberOfSubrectangles to undefined', function (done) {
+            this.hextile._subencodingMask = 26;
+            this.hextile._numberOfSubrectangles = 134;
+            
+            this.hextile.nextTile();
+            
+            expect(this.hextile._subencodingMask).to.be.undefined;
+            expect(this.hextile._numberOfSubrectangles).to.be.undefined;
+            done();
+        });
+        
+        it('should set #_lastSubencodingMask', function (done) {
+            this.hextile._subencodingMask = 26;
+            this.hextile._numberOfSubrectangles = 134;
+
+            this.hextile.nextTile();
+            
+            expect(this.hextile._lastSubencodingMask).to.equal(26);
             done();
         });
     });

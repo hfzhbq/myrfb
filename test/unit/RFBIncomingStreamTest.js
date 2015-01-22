@@ -127,6 +127,16 @@ describe('RFBIncomingStream', function () {
     
     
     
+    describe('#setPixelFormat()', function () {
+        it('should be an instance method', function (done) {
+            var is = this.RFBIncomingStream.create(this.socket, 'client');
+            expect(is.setPixelFormat).to.be.a('function');
+            done();
+        });
+    });
+    
+    
+    
     describe('#setAsyncMode(listener)', function () {
         beforeEach(function (done) {
             this.incomingStream.processHeadRequest = test.sinon.spy();
@@ -403,6 +413,29 @@ describe('RFBIncomingStream', function () {
             expect(this.incomingStream._requests).to.have.length(1);
             expect(this.incomingStream._requests[0]).to.have.property('msg').that.equals(message);
             
+            done();
+        });
+        
+        it('should use if message has #setPixelFormat() method it should set pixelFormat', function (done) {
+            var messageType = 0;
+            var pixelFormat = {a: 'current pixel format'};
+            var isServer = 'boolean value';
+            var spy = test.sinon.spy();
+            var message = {a: 'message', setPixelFormat: spy};
+
+            var buf = new Buffer(10);
+            buf.writeUInt8(messageType, 0);
+
+            this.incomingStream.buffer.returns(buf);
+            this.incomingStream.isServer.returns(isServer);
+            this.MessageFactory.guessAndPrepareIncoming.withArgs(messageType, isServer).returns(message);
+            
+            this.incomingStream.setPixelFormat(pixelFormat);
+            var res = this.incomingStream.checkAsyncMessage();
+            
+            expect(spy).calledOnce
+            .and.calledWithExactly(pixelFormat);
+
             done();
         });
     });

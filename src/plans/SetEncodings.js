@@ -5,7 +5,7 @@ module.exports = [{
     default:2
 }, {
     type:   'padding',
-    nbytes: 3
+    nbytes: 1
 }, {
     name:   'numberOfEncodings',
     type:   'u16',

@@ -4,7 +4,7 @@ var F = util.format;
 var RectangleFactory = require('./RectangleFactory');
 
 function FramebufferUpdate () {
-    this._properties = [];
+    this._properties = {};
     this._state = 'msgHead';
     this._currentRect = null;
     this._rectangles = [];
@@ -16,6 +16,11 @@ p.name = function name () {
     return 'FramebufferUpdate';
 };
 
+
+p.setPixelFormat = function setPixelFormat (pixelFormat) {
+    this._pixelFormat = pixelFormat;
+    this.bytesPerPixel = pixelFormat.bitsPerPixel / 8;
+};
 
 
 p.requiredLength = function requiredLength () {
@@ -46,7 +51,6 @@ p.requiredLength = function requiredLength () {
 
 p.addChunk = function addChunk (chunk) {
     var l = this.requiredLength();
-    var mt
     
     if ( chunk.length !== l ) {
         throw Error(F('Expected chunk %d octets long but got %d', l, chunk.length));
@@ -75,7 +79,7 @@ p.addChunk = function addChunk (chunk) {
 
 
 p._addMSGHead = function _addMSGHead (chunk) {
-    mt = chunk.readUInt8(0);
+    var mt = chunk.readUInt8(0);
     if ( mt !== 0 ) {
         throw Error(F('Expected message type to be 0 but got %d', mt));
     }
@@ -98,6 +102,7 @@ p._addRectHead = function _addRectHead (chunk) {
     head.encodingType = chunk.readInt32BE(8);
     
     this._currentRect = RectangleFactory.create(head);
+    this._currentRect.bytesPerPixel = this.bytesPerPixel;
     this._state = 'rectBody';
 };
 
@@ -129,7 +134,27 @@ p._setProperty = function _setProperty (name, value) {
 };
 
 p.toBuffer = function () {
-    // FIXME: todo
+    var length = 4;
+    var rectangles = this.getProperty('rectangles')
+    var buffers = [];
+    var buf;
+    
+    if ( ! Array.isArray(rectangles) ) {
+        return;
+    }
+    
+    buf = new Buffer(4);
+    buf.writeUInt8(0, 0)
+    buf.writeUInt16BE(rectangles.length, 2);
+    
+    buffers.push(buf);
+    
+    rectangles.forEach( function (r) {
+        buffers.push(r.toBuffer());
+    });
+    
+    return Buffer.concat.call(Buffer, buffers);
+    
 };
 
 

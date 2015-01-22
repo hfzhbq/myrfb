@@ -1,3 +1,8 @@
+var debug = require('debug')('MyRFB_IncomingStream');
+
+// FIXME: this is for debugging only
+var fs = require('fs');
+// ---------------------------------
 var MessageFactory = require('./MessageFactory');
 
 var KNOWN_ROLES = ['client', 'server'];
@@ -7,6 +12,9 @@ function RFBIncomingStream (socket, isServer) {
     this._requests = [];
     this._setRole(isServer);
     this._mode = 'sync';
+    // FIXME: this is for debugging only
+    this._fs = fs;
+    // ---------------------------------
     socket.on('data', this.addChunk.bind(this));
     
     // FIXME: listen to socket's 'error' and 'end' events too!
@@ -35,6 +43,11 @@ p._setRole = function _setRole (isServer) {
 
 p.isServer = function isServer () {
     return this._isServer;
+};
+
+
+p.setPixelFormat = function setBytesPerPixel (pixelFormat) {
+    this._pixelFormat = pixelFormat;
 };
 
 
@@ -73,6 +86,7 @@ p.addChunk = function addChunk (chunk) {
         this._buffer = Buffer.concat([this._buffer, chunk], length);
     }
     
+    debug('got %d octets', chunk.length);
     this.processHeadRequest();
 };
 
@@ -123,6 +137,10 @@ p.checkAsyncMessage = function checkAsyncMessage () {
     
     messageType = buf.readUInt8(0);
     msg = MessageFactory.guessAndPrepareIncoming(messageType, this.isServer());
+    
+    if ( typeof msg.setPixelFormat === 'function' ) {
+        msg.setPixelFormat(this._pixelFormat);
+    }
     
     this._requests.push({msg: msg});
     

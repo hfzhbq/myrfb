@@ -108,8 +108,48 @@ describe('MyRFB', function () {
     });
     
     
-
-    describe('#send(msgName, cb)', function () {
+    
+    describe('#setHSIData(msgName, data)', function () {
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.setHSIData).to.be.a('function');
+            done();
+        });
+    });
+    
+    
+    
+    describe('#getHSIData(msgName)', function () {
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.getHSIData).to.be.a('function');
+            done();
+        });
+        
+        it('should return data set with #setHSIData', function (done) {
+            var data = {a: 'HSI message data'};
+            var msgName = 'a name of a message';
+            
+            this.myRFB.setHSIData(msgName, data);
+            
+            expect(this.myRFB.getHSIData(msgName)).to.equal(data);
+            
+            done();
+        });
+    });
+    
+    
+    describe('#getCurrentPixelFormat()', function () {
+        it('should be an instance method', function (done) {
+            expect(this.myRFB.getCurrentPixelFormat).to.be.a('function');
+            done();
+        });
+        
+        it('should return undefined by default', function (done) {
+            expect(this.myRFB.getCurrentPixelFormat()).to.be.undefined;
+            done();
+        });
+    });
+    
+    describe('#send(msgName[, data], cb)', function () {
         beforeEach( function (done) {
             this.msg = {
                 a:  'client message',
@@ -126,22 +166,22 @@ describe('MyRFB', function () {
 
         it('should use MessageFactory to create a message', function (done) {
             var msgName = 'a message name';
+            var msgData = {a: 'message data'};
             var cb = test.sinon.spy();
 
-            // TODO: data!!!
             this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
+            this.myRFB.getHSIData = test.sinon.stub().withArgs(msgName).returns(msgData);
 
             this.myRFB.send(msgName, cb);
 
             expect(this.MessageFactory.prepareOutgoing).calledOnce
-            .and.calledWithExactly(msgName);
+            .and.calledWithExactly(msgName, msgData);
 
             done();
         });
 
         it('should pass message.toBuffer() and and cb to the socket.write', function (done) {
             var msgName = 'a message name';
-
             var cb = test.sinon.spy();
 
             this.msg.toBuffer.returns(this.msg.$buffer);
@@ -149,9 +189,58 @@ describe('MyRFB', function () {
 
             this.myRFB.send(msgName, cb);
 
-            expect(this.socket.send).calledOnce
+            expect(this.socket.write).calledOnce
             .and.calledWithExactly(this.msg.$buffer, cb);
 
+            done();
+        });
+        
+        it('should use data to prepare a message if provided', function (done) {
+            var msgName = 'a message name';
+            var cb = test.sinon.spy();
+            var msgData = {a: 'message data'};
+            
+            this.msg.toBuffer.returns(this.msg.$buffer);
+            this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
+            
+            this.myRFB.send(msgName, msgData, cb);
+            
+            expect(this.MessageFactory.prepareOutgoing).calledOnce
+            .and.calledWithExactly(msgName, msgData);
+            
+            expect(this.socket.write).calledOnce
+            .and.calledWithExactly(this.msg.$buffer, cb);
+            
+            done();
+        });
+        
+        it('should modify current pixel format on ServerInit or SetPixelFormat (incoming stream too!)', function (done) {
+            var pixelFormat = {a: 'server pixel format'};
+            var msgName = 'ServerInit';
+            var msgData = {a: 'message data', serverPixelFormat: pixelFormat};
+            var cb = test.sinon.spy();
+
+            this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
+            this.myRFB.getHSIData = test.sinon.stub().withArgs(msgName).returns(msgData);
+            
+            this.myRFB.send(msgName, cb);
+
+            expect(this.myRFB.getCurrentPixelFormat()).to.equal(pixelFormat);
+            expect(this.incomingStream.setPixelFormat).calledOnce
+            .and.calledWithExactly(pixelFormat);
+
+            msgName = 'SetPixelFormat';
+            pixelFormat = {a: 'client pixel format'};
+            msgData = {a: 'message data', pixelFormat: pixelFormat};
+            this.myRFB.getHSIData = test.sinon.stub().withArgs(msgName).returns(msgData);
+            this.MessageFactory.prepareOutgoing.withArgs(msgName).returns(this.msg);
+            this.incomingStream.setPixelFormat.reset();
+            
+            this.myRFB.send(msgName, cb);
+
+            expect(this.myRFB.getCurrentPixelFormat()).to.equal(pixelFormat);
+            expect(this.incomingStream.setPixelFormat).calledOnce
+            .and.calledWithExactly(pixelFormat);
             done();
         });
     });
@@ -220,6 +309,24 @@ describe('MyRFB', function () {
 
                 expect(this.myRFB.emit).calledOnce
                 .and.calledWithExactly('initialise', this.message, this.cb);
+                done();
+            });
+            
+            it('should modify current pixel format on ServerInit (incoming stream too!)', function (done) {
+                var pixelFormat = {a: 'server pixel format'};
+                var cb = test.sinon.spy();
+
+                this.MessageFactory.prepareIncoming.withArgs('ServerInit').returns(this.message);
+                this.message.name.returns('ServerInit');
+                this.message.getProperty.withArgs('serverPixelFormat').returns(pixelFormat);
+                this.incomingStream.receive.yields(null, this.message);
+
+                this.myRFB.receive('ServerInit', cb);
+
+                expect(this.myRFB.getCurrentPixelFormat()).to.equal(pixelFormat);
+                expect(this.incomingStream.setPixelFormat).calledOnce
+                .and.calledWithExactly(pixelFormat);
+                
                 done();
             });
         });
@@ -372,6 +479,12 @@ describe('MyRFB', function () {
     
     
     describe('#onAsyncMessage()', function () {
+        beforeEach(function (done) {
+            this.myRFB.emit = test.sinon.spy();
+            this.message = test.mock('message');
+            this.message.name.returns('message name');
+            done();
+        });
         it('should be an instance method', function (done) {
             expect(this.myRFB.onAsyncMessage).to.be.a('function');
             done();
@@ -379,14 +492,25 @@ describe('MyRFB', function () {
         
         it('should emit "message" event', function (done) {
             var error = null;
-            var message = {a: 'message'};
             
-            this.myRFB.emit = test.sinon.spy();
-            
-            this.myRFB.onAsyncMessage(error, message);
+            this.myRFB.onAsyncMessage(error, this.message);
             
             expect(this.myRFB.emit).calledOnce
-            .and.calledWithExactly('message', message);
+            .and.calledWithExactly('message', this.message);
+            done();
+        });
+        
+        it('should update pixelFormat on SetPixelFormat message', function (done) {
+            var pixelFormat = {a: 'pixelFormat'};
+            
+            this.message.name.returns('SetPixelFormat');
+            this.message.getProperty.withArgs('pixelFormat').returns(pixelFormat);
+            
+            this.myRFB.onAsyncMessage(null, this.message);
+            
+            expect(this.incomingStream.setPixelFormat).calledOnce
+            .and.calledWithExactly(pixelFormat);
+            
             done();
         });
     });

@@ -5,5 +5,5 @@ module.exports = [{
 },{
     name:   'securityTypes',
     type:   'u8',
-    nbytes: 'numberOfecurityTypes'
+    nbytes: 'numberOfSecurityTypes'
 }];

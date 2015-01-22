@@ -1,10 +1,29 @@
 var util = require('util');
 var F = util.format;
-// TODO: use require-directory there %-)
+
 var predefinedPlans = require('./plans');
 var RFBType = require('./RFBType');
 
+// TODO: this may be generalized as "Dynamic messages"
+var FramebufferUpdate = require('./FramebufferUpdate');
+
 var customPlans = {};
+
+var CLIENT_TO_SERVER = {
+    0:  'SetPixelFormat',
+    2:  'SetEncodings',
+    3:  'FramebufferUpdateRequest',
+    4:  'KeyEvent',
+    5:  'PointerEvent',
+    6:  'ClientCutText'
+};
+
+var SERVER_TO_CLIENT = {
+    0:  'FramebufferUpdate',
+    1:  'SetColourMapEntries',
+    2:  'Bell',
+    3:  'ServerCutText'
+};
 
 function getPlan (planName) {
     var plan = predefinedPlans[planName] || customPlans[planName] || null;
@@ -99,7 +118,7 @@ p._feedData = function _feedData (data) {
             continue;
         }
         
-        v = data[pl.name] || pl.default;
+        v = typeof data[pl.name] === 'undefined' ? pl.default : data[pl.name];
         if ( typeof v === 'undefined' ) {
             throw Error('missing value for property "' + pl.name + '"');
         }
@@ -108,12 +127,14 @@ p._feedData = function _feedData (data) {
         if ( typeof pl.nbytes === 'string' ) {
             l = data[pl.name].length;
             // length to nbytes
+            /*
             if ( pl.type.substr(1) === '16' ) {
                 l *= 2;
             }
             if ( pl.type.substr(1) === '32' ) {
                 l *= 4;
             }
+            */
             this._setProperty(pl.nbytes, l);
         }
     }
@@ -127,9 +148,11 @@ p.requiredLength = function requiredLength () {
 
     for ( ; i < l; i++ ) {
         nbytes = this._plan[i].nbytes;
-        nbytes = typeof nbytes === 'string' ?
-            this.getProperty(nbytes) : nbytes;
-
+        
+        if ( typeof nbytes === 'string' ) {
+            nbytes = this._arrayNBytes(nbytes, this._plan[i].type);
+        }
+        
         if ( typeof nbytes === 'number' ) {
             len += nbytes;
         }
@@ -141,12 +164,27 @@ p.requiredLength = function requiredLength () {
     return len;
 };
 
+p._arrayNBytes = function _arrayNBytes (property, type) {
+    var nbytes = this.getProperty(property);
+    type = type.substr(1);
+    if ( typeof nbytes === 'number' ) {
+        if ( type === '32' ) { nbytes *= 4; }
+        if ( type === '16' ) { nbytes *= 2; }
+    }
+    
+    return nbytes;
+};
+
 p.getProperty = function getProperty (propertyName) {
     return this._properties[propertyName];
 };
 
 p._setProperty = function _setProperty (propertyName, value) {
     this._properties[propertyName] = value;
+};
+
+p.toObject = function () {
+    return this._properties;
 };
 
 p.addChunk = function addChunk (chunk) {
@@ -169,7 +207,9 @@ p.addChunk = function addChunk (chunk) {
                 this.getProperty(descr.nbytes) : descr.nbytes;
             
             value = RFBType.fromBuffer(chunk, chunkPos, descr.type, nbytes);
-            
+            if ( nbytes === 1 && typeof descr.nbytes === 'string' ) {
+                value = [value];
+            }
             this._setProperty(descr.name, value);
         }
         
@@ -187,7 +227,7 @@ p.toBuffer = function toBuffer() {
     while ( bufPos < buf.length && planPos < this._plan.length ) {
         part = this._plan[planPos];
         nbytes = typeof part.nbytes === 'string' ?
-            this.getProperty(part.nbytes) : part.nbytes;
+            this._arrayNBytes(part.nbytes, part.type) : part.nbytes;
         
         if ( part.type.toUpperCase() !== 'PADDING' ) {
             value = this.getProperty(part.name);
@@ -203,9 +243,28 @@ p.toBuffer = function toBuffer() {
 };
 
 function prepareIncoming (planName) {
-    var plan = this.getPlan(planName);
-    var msg = new Message(planName, plan);
+    var plan, msg;
+    
+    if ( planName === 'FramebufferUpdate' ) {
+        msg = FramebufferUpdate.prepareIncoming();
+        return msg;
+    }
+    
+    plan = this.getPlan(planName);
+    msg = new Message(planName, plan);
     return msg;
+}
+
+
+function guessAndPrepareIncoming (messageType, isServer) {
+    var index = isServer ? CLIENT_TO_SERVER : SERVER_TO_CLIENT;
+    var messageName = index[messageType];
+    
+    if ( typeof messageName === 'string' ) {
+        return this.prepareIncoming(messageName);
+    }
+    
+    throw Error(F('Unknown message type %d', messageType));
 }
 
 
@@ -224,6 +283,7 @@ module.exports = {
     addPlan:    addPlan,
     checkPlan:  checkPlan,
     
+    guessAndPrepareIncoming: guessAndPrepareIncoming,
     prepareIncoming:    prepareIncoming,
     prepareOutgoing:    prepareOutgoing,
     

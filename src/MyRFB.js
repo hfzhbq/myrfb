@@ -31,6 +31,7 @@ function MyRFB (socket, role) {
     this._setRole(role);
     this._incomingStream = RFBIncomingStream.create(socket, this.isServer());
     this._state = 'handshake';
+    this._hsi = {};
 }
 
 
@@ -51,9 +52,22 @@ p._setRole = function (role) {
     throw Error('Role must be either "server" or "client" or undefined');
 };
 
+
+
 p.isServer = function isServer () {
     return this._role === 'server';
 };
+
+
+p.setHSIData = function setHSIData (msgName, data) {
+    this._hsi[msgName] = data;
+};
+
+p.getHSIData = function (msgName) {
+    return this._hsi[msgName];
+};
+
+
 
 p.handshake = function handshake (cb) {
     var tasks = HANDSHAKE.map( this._getStage.bind(this) );
@@ -81,7 +95,17 @@ p.initialise = function initialise (cb) {
     });
 };
 
+
+p.getCurrentPixelFormat = function getCurrentPixelFormat () {
+    return this._pixelFormat;
+};
+
 p.onAsyncMessage = function (error, message) {
+    if (message.name() === 'SetPixelFormat') {
+        this._pixelFormat = message.getProperty('pixelFormat');
+        this._incomingStream.setPixelFormat(this._pixelFormat);
+    }
+    
     this.emit('message', message);
 };
 
@@ -100,10 +124,27 @@ p._getStage = function _getStage (stage) {
     return this[method].bind(this, stage.msg);
 }
 
-p.send = function send (msgName, cb) {
-    // FIXME: data to prepare an outcoming message ???
-    var msg = MessageFactory.prepareOutgoing(msgName);
-    this._socket.send(msg.toBuffer(), cb);
+p.send = function send (msgName, data, cb) {
+    if ( typeof cb === 'undefined' && typeof data === 'function' ) {
+        cb = data;
+        data = null;
+    }
+    
+    data = data || this.getHSIData(msgName);
+    var msg = MessageFactory.prepareOutgoing(msgName, data);
+    
+    if ( msgName === 'ServerInit' ) {
+        this._pixelFormat = data.serverPixelFormat;
+        this._incomingStream.setPixelFormat(this._pixelFormat);
+    }
+    
+    if ( msgName === 'SetPixelFormat' ) {
+        this._pixelFormat = data.pixelFormat;
+        this._incomingStream.setPixelFormat(this._pixelFormat);
+    }
+
+    
+    this._socket.write(msg.toBuffer(), cb);
 };
 
 p.receive = function receive (msgName, cb) {
@@ -114,6 +155,13 @@ p.receive = function receive (msgName, cb) {
     var _this = this;
     
     this._incomingStream.receive(msg, function (error, message) {
+        var name = message.name();
+        
+        if ( name === 'ServerInit' ) {
+            _this._pixelFormat = message.getProperty('serverPixelFormat');
+            _this._incomingStream.setPixelFormat(_this._pixelFormat);
+        }
+        
         _this.emit(_this._state, message, cb);
     });
 };

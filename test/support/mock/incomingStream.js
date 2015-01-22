@@ -5,6 +5,6 @@ module.exports = function (options) {
     
     stream.receive = sinon.stub();
     stream.setAsyncMode = sinon.spy();
-    
+    stream.setPixelFormat = sinon.spy();
     return stream;
 };

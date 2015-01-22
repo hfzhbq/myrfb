@@ -6,13 +6,16 @@ describe('MessageFactory', function () {
         this.plans = {
             predefinedPlan: [{nbytes:1, type: 'U8', name: 'some name'}]
         };
+        
+        this.FramebufferUpdate = test.mock('FramebufferUpdate');
 
         this.anyPlan = [{type: 'u8', nbytes: 1}];
 
         this.RFBType = test.mock('RFBType');
         this.MessageFactory = test.proxyquire('../../src/MessageFactory', {
             './plans': this.plans,
-            './RFBType': this.RFBType
+            './RFBType': this.RFBType,
+            './FramebufferUpdate': this.FramebufferUpdate
         });
         done();
     });
@@ -33,6 +36,80 @@ describe('MessageFactory', function () {
             
             done();
         });
+        
+        it('should create FramebufferUpdate "dynamic" message', function (done) {
+            var fbu = {a: 'FramebufferUpdate message'};
+            this.FramebufferUpdate.prepareIncoming.returns(fbu);
+            
+            var msg = this.MessageFactory.prepareIncoming('FramebufferUpdate');
+            
+            expect(this.FramebufferUpdate.prepareIncoming).calledOnce;
+            expect(msg).to.equal(fbu);
+            
+            done();
+        });
+    });
+    
+    
+    
+    describe('.guessAndPrepareIncoming(messageType, isServer)', function () {
+        beforeEach(function (done) {
+            this.MessageFactory.prepareIncoming = test.sinon.stub().returns(this.message);
+            this.checkMessage = function (isServer, s) {
+                var a = s.split(':');
+                var messageType = a[1];
+                var messageName = a[0];
+                this.MessageFactory.prepareIncoming.reset();
+
+                var msg = this.MessageFactory.guessAndPrepareIncoming(messageType, isServer);
+
+                expect(this.MessageFactory.prepareIncoming).calledOnce
+                .and.calledWithExactly(messageName);
+            };
+            
+            done();
+        });
+        
+        it('should be a static method', function (done) {
+            expect(this.MessageFactory.guessAndPrepareIncoming).to.be.a('function');
+            done();
+        });
+        
+        describe('role=client', function () {
+            beforeEach(function (done) {
+                this.messages = 'FramebufferUpdate:0, SetColourMapEntries:1, Bell:2, ServerCutText:3'.split(/\s*,\s*/g);
+                done();
+            });
+            
+            it('should return Server to Client message', function (done) {
+                this.messages.forEach( this.checkMessage.bind(this, false) );
+                done();
+            });
+        });
+        
+        describe('role=server', function () {
+            beforeEach(function (done) {
+                this.messages = 'SetPixelFormat:0, SetEncodings:2, FramebufferUpdateRequest:3, KeyEvent:4, PointerEvent:5, ClientCutText:6'.split(/\s*,\s*/g);
+                done();
+            });
+            
+            it('should return Client to Server message', function (done) {
+                this.messages.forEach( this.checkMessage.bind(this, true) );
+                done();
+            });
+            
+            it('should throw if mesageType is unknown', function (done) {
+                var messageType = -777;
+                var MF = this.MessageFactory;
+                
+                expect( function () {
+                    MF.guessAndPrepareIncoming(messageType);
+                }).to.throw('message type')
+                
+                done();
+            });
+        });
+        
     });
     
     
@@ -58,6 +135,16 @@ describe('MessageFactory', function () {
             done();
         });
     });
+    
+    
+    describe('#toObject()', function () {
+        it('should be an instance method', function (done) {
+            var msg = this.MessageFactory.prepareIncoming('predefinedPlan');
+            expect(msg.toObject).to.be.a('function');
+            done();
+        });
+    });
+    
 
     describe('#requiredLength()', function () {
         it('should be an instance method', function (done) {
@@ -262,6 +349,33 @@ describe('MessageFactory', function () {
             message.addChunk(buf2);
 
             expect(message.getProperty('msg')).to.equal(msg);
+            
+            done();
+        });
+        
+        it('should understand the arrays of basic types with length === 1', function (done) {
+            var plan = [
+                {type: 'u32', nbytes: 4, name: 'length'},
+                {type: 'u8', nbytes: 'length', name: 'num'}
+            ];
+
+            var num = 13;
+            var buf1 = new Buffer(4);
+            var buf2 = new Buffer(1);
+
+            this.RFBType.fromBuffer
+            .withArgs(buf1, 0, 'u32', 4).returns(1)
+            .withArgs(buf2, 0, 'u8', 1).returns(num);
+
+            this.MessageFactory.addPlan('custom', plan);
+
+            var message = this.MessageFactory.prepareIncoming('custom');
+
+            message.addChunk(buf1);
+            message.addChunk(buf2);
+
+            expect(message.getProperty('num')).to.deep.equal([num]);
+            
             done();
         });
     });

@@ -1,38 +1,6 @@
 var test = require('../support/test');
 var expect = test.expect;
 
-/* not clever at all!
-var predefinedEncodings = [
-    {
-        type:   0,
-        name:   'Raw'
-    },
-    {
-        type:   1,
-        name:   'CopyRect'
-    },
-    {
-        type:   2,
-        name:   'RRE'
-    },
-    {
-        type:   5,
-        name:   'Hextile'
-    },
-    {
-        type:   16,
-        name:   'ZRLE'
-    },
-    {
-        type:   -239,
-        name:   'Cursor'
-    },
-    {
-        type:   -223,
-        name:   'DesktopSize'
-    },
-];
-*/
 describe('RectangleFactory', function () {
     beforeEach(function (done) {
         this.PredefinedRectangles = test.mock('PredefinedRectangles');
@@ -52,23 +20,83 @@ describe('RectangleFactory', function () {
             expect(this.RectangleFactory.create).to.be.a('function');
             done();
         });
-        
+
         it('should instantiate the predefined rectangles', function (done) {
             var rectHead = {
                 encodingType:   222
             };
-            
+
             var rect = {a: 'predefined rectangle'};
-            
+
             this.PredefinedRectangles.create.withArgs(rectHead).returns(rect);
-            
+
             var res = this.RectangleFactory.create(rectHead);
-            
+
             expect(this.PredefinedRectangles.create).calledOnce
             .and.calledWithExactly(rectHead);
-            
+
             expect(res).to.equal(rect);
+
+            done();
+        });
+    });
+
+
+    describe('#toBuffer()', function () {
+        beforeEach(function (done) {
+            this.rectHead = {
+                xPosition:  1,
+                yPosition:  2,
+                width:      3,
+                height:     4,
+                encodingType: 5
+            };
+
+            this.rectangle = {head: this.rectHead};
+
+            this.PredefinedRectangles.create.withArgs(this.rectHead).returns(this.rectangle);
+
+            done();
+        });
+
+        it('should be an instance method', function (done) {
+            var rect = this.RectangleFactory.create(this.rectHead);
+            expect(rect.toBuffer).to.be.a('function');
+            done();
+        });
+
+        it('should return Buffer with length 12 containing rectHead if there is no data', function (done) {
+            var rect = this.RectangleFactory.create(this.rectHead);
+            var buf = rect.toBuffer();
+
+            expect(buf).to.be.instanceOf(Buffer)
+            .and.have.property('length').that.equals(12);
+
+            expect(buf.readUInt16BE(4)).to.equal(this.rectHead.width);
+            done();
+        });
+
+        it('should insert data too (data is a buffer)', function (done) {
+            var rect = this.RectangleFactory.create(this.rectHead);
+            this.rectangle.data = new Buffer(10);
             
+            var buf = rect.toBuffer();
+            
+            expect(buf.length).to.equal(12+10);
+            expect(buf.slice(12, 22).toString('hex')).to.equal(this.rectangle.data.toString('hex'));
+            done();
+        });
+        
+        it('should insert data too (data is an Array)', function (done) {
+            var rect = this.RectangleFactory.create(this.rectHead);
+            this.rectangle.data = [new Buffer(10), new Buffer(32)];
+
+            var buf = rect.toBuffer();
+
+            expect(buf.length).to.equal(12+10+32);
+            
+            expect(buf.slice(12, 22).toString('hex')).to.equal(this.rectangle.data[0].toString('hex'));
+
             done();
         });
     });

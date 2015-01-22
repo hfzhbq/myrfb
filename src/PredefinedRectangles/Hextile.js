@@ -4,11 +4,11 @@ function HextileRectangle (reqHead) {
 
     this.irow = 0;
     this.nrows = Math.ceil(this.head.height / 16);
-    this.bottomHeight = this.head.height % 16;
+    this.bottomHeight = this._lastRectSize(this.head.height);
 
     this.icol = 0;
     this.ncols = Math.ceil(this.head.width / 16);
-    this.rightWidth = this.head.width % 16;
+    this.rightWidth = this._lastRectSize(this.head.width);
 
     this._state = 'tileHead';
 
@@ -17,6 +17,11 @@ function HextileRectangle (reqHead) {
 }
 
 var p = HextileRectangle.prototype;
+
+p._lastRectSize = function (l) {
+    var  l = l % 16;
+    return l || 16;
+};
 
 p.encodingType = function encodingType () {
     return 'Hextile';
@@ -55,7 +60,7 @@ p.requiredLength = function requiredLength () {
 
     if ( this._state === 'subtiles' ) {
         return this._subencodingMask & 0x10 ?
-            (4 + this.bytesPerPixel) * this._numberOfSubrectangles : 2 * this._numberOfSubrectangles;
+            (2 + this.bytesPerPixel) * this._numberOfSubrectangles : 2 * this._numberOfSubrectangles;
 
     }
 };
@@ -68,13 +73,17 @@ p.addChunk = function addChunk (chunk) {
     
     if ( this._state === 'tileHead' ) {
         this._subencodingMask = chunk.readUInt8(0);
+        if ( this._subencodingMask === 0 ) {
+            return this.nextTile();
+        }
         this._state = 'tileBody';
         return;
     }
     
     if ( this._state === 'tileBody' ) {
         if ( this._subencodingMask & 8 ) {
-            this._numberOfSubrectangles = chunk.readUInt8(0);
+            // it is the last byte in the chunk
+            this._numberOfSubrectangles = chunk.readUInt8(chunk.length - 1);
             this._state = 'subtiles';
         }
         else {
@@ -91,6 +100,11 @@ p.addChunk = function addChunk (chunk) {
 
 p.nextTile = function nextTile () {
     this._state = 'tileHead';
+    // FIXME: remove this
+    this._lastSubencodingMask = this._subencodingMask;
+    this._subencodingMask = undefined
+    this._numberOfSubrectangles = undefined;
+    
     this.icol++;
     if ( this.icol === this.ncols ) {
         this.icol = 0;

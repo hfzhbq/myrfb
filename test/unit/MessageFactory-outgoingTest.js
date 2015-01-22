@@ -51,6 +51,13 @@ describe('MessageFactory', function () {
             done();
         });
         
+        it('should respect values === 0', function (done) {
+            this.data['some name'] = 0;
+            var msg = this.MessageFactory.prepareOutgoing('predefinedPlan', this.data);
+            expect(msg.getProperty('some name')).to.equal(this.data['some name']);
+            done();
+        });
+        
         it('should calculate lengths', function (done) {
             var descr = [
                 {type: 'u32', nbytes: 4, name: 'length'},
@@ -76,7 +83,7 @@ describe('MessageFactory', function () {
             this.MessageFactory.addPlan('custom', descr);
             var msg = this.MessageFactory.prepareOutgoing('custom', {numbers: numbers});
 
-            expect(msg.getProperty('length')).to.equal(2*numbers.length);
+            expect(msg.getProperty('length')).to.equal(numbers.length);
             
             done();
         });
@@ -91,7 +98,7 @@ describe('MessageFactory', function () {
             this.MessageFactory.addPlan('custom', descr);
             var msg = this.MessageFactory.prepareOutgoing('custom', {numbers: numbers});
 
-            expect(msg.getProperty('length')).to.equal(4*numbers.length);
+            expect(msg.getProperty('length')).to.equal(numbers.length);
 
             done();
         });
@@ -251,7 +258,7 @@ describe('MessageFactory', function () {
             
             expect(this.RFBType.toBuffer).calledThrice
             .and.calledWithMatch(aBuffer, 0, 'u8', data.a)
-            .and.calledWithMatch(aBuffer, 4, 'u32', 4*data.d.length)
+            .and.calledWithMatch(aBuffer, 4, 'u32', data.d.length)
             .and.calledWithMatch(aBuffer, 8, 's32', data.d);
             done();
         });

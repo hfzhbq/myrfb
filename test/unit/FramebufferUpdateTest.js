@@ -49,6 +49,49 @@ describe('FramebufferUpdate', function () {
     });
     
     
+    
+    describe('#toBuffer()', function () {
+        it('should return a buffer with length equal to rectHead length + all rectangles', function (done) {
+            var rectangles = [{
+                toBuffer:   function () { return new Buffer(42) },
+            }, {
+                toBuffer:   function () { return new Buffer(32) },
+            }];
+            
+            var dataLength = 42 + 32;
+            
+            this.fbu._state = 'ready';
+            this.fbu._rectangles = rectangles;
+            this.fbu._setProperty('numberOfRectangles', rectangles.length);
+            
+            var buf = this.fbu.toBuffer();
+            
+            expect(buf).to.be.instanceof(Buffer)
+            .and.have.length(dataLength + 4)
+            
+            done();
+        });
+    });
+    
+    
+    
+    describe('#setPixelFormat(pixelFormat)', function () {
+        it('should be an instance method', function (done) {
+            expect(this.fbu.setPixelFormat).to.be.a('function');
+            done();
+        });
+        
+        it('should set #bytesPerPixel', function (done) {
+            var pixelFormat = {bitsPerPixel: 16};
+            this.fbu.setPixelFormat(pixelFormat);
+            
+            expect(this.fbu.bytesPerPixel).to.equal(pixelFormat.bitsPerPixel / 8);
+            
+            done();
+        });
+    });
+    
+    
     describe('#requiredLength()', function () {
         
         it('should return 4 before any chunks added', function (done) {
@@ -267,8 +310,23 @@ describe('FramebufferUpdate', function () {
             done();
         });
         
+        it('should set _currentRect.bytesPerPixel', function (done) {
+            var bytesPerPixel = 4;
+            var chunk = this.rectangleHeadBuffer( this.rectangleHead );
+            
+            this.fbu.bytesPerPixel = bytesPerPixel;
+            this.RectangleFactory.create.returns(this.rectangle);
+
+            this.fbu._addRectHead(chunk);
+
+            expect(this.rectangle.bytesPerPixel).to.equal(bytesPerPixel);
+
+            done();
+        });
+        
         it('should change the state to "rectBody"', function (done) {
             var chunk = this.rectangleHeadBuffer( this.rectangleHead );
+            this.RectangleFactory.create.returns(this.rectangle);
             expect(this.fbu._state).to.not.equal('rectBody');
             this.fbu._addRectHead(chunk);
             expect(this.fbu._state).to.equal('rectBody');
