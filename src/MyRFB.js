@@ -5,6 +5,7 @@ var async = require('async');
 
 var RFBIncomingStream = require('./RFBIncomingStream');
 var MessageFactory = require('./MessageFactory');
+var RectangleFactory = require('./RectangleFactory');
 
 var ROLES = ['server', 'client'];
 
@@ -24,6 +25,32 @@ var INIT = [
 ];
 
 util.inherits(MyRFB, EventEmitter);
+
+function create (socket, role) {
+    return new MyRFB(socket, role);
+}
+
+function use (mod) {
+    if ( typeof mod !== 'function' ) {
+        throw Error('Mod must be a function');
+    }
+    
+    
+    mod(this);
+}
+
+function addRectangle (encodingType, Constr) {
+    if ( typeof encodingType !== 'number' || isNaN(encodingType) ) {
+        throw Error('encodingType must be a number');
+    }
+    
+    if ( typeof Constr !== 'function' ) {
+        throw Error('Constr must be a function');
+    }
+    
+    RectangleFactory.addRectangle(encodingType, Constr);
+}
+
 
 function MyRFB (socket, role) {
     EventEmitter.call(this);
@@ -170,10 +197,10 @@ p.authenticate = function authenticate (cb) {
     cb(null);
 };
 
-function create (socket, role) {
-    return new MyRFB(socket, role);
-}
+
 
 module.exports = {
-    create: create
+    create: create,
+    use:    use,
+    addRectangle: addRectangle
 };

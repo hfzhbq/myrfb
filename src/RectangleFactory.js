@@ -1,10 +1,26 @@
 var PredefinedRectangles = require('./PredefinedRectangles');
 
+var CustomRectangles = {};
+
 function create (rectHead) {
     //var t = rectHead.encodingType;
     var rect = PredefinedRectangles.create(rectHead);
+    
+    if ( rect === null ) {
+        if ( typeof CustomRectangles[rectHead.encodingType] === 'function' ) {
+            rect = new CustomRectangles[rectHead.encodingType](rectHead);
+        }
+        else {
+            throw Error('Can\t create Rectangle: encoding is unknown: ' + rectHead.encodingType);
+        }
+    }
+    
     rect.toBuffer = toBuffer;
     return rect;
+}
+
+function addRectangle (encodingType, Constr) {
+    CustomRectangles[encodingType] = Constr;
 }
 
 function toBuffer () {
@@ -27,5 +43,6 @@ function toBuffer () {
 }
 
 module.exports = {
-    create: create
+    create: create,
+    addRectangle: addRectangle
 };

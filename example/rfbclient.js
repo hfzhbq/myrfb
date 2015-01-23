@@ -3,9 +3,12 @@ var ENCODINGS = {
     1:  'CopyRect',
     2:  'RRE',
     5:  'Hextile',
+    7:  'Tight',
     16: 'ZRLE',
+    '-223': 'DesktopSize',
     '-239': 'Cursor',
-    '-223': 'DesktopSize'
+    '-260': 'TightPNG'
+    
 };
 
 var util = require('util');
@@ -14,6 +17,9 @@ var F = util.format;
 var net = require('net');
 
 var MyRFB = require('../src/MyRFB');
+var Tight = require('myrfb-tight');
+
+MyRFB.use(Tight);
 
 var rfb = {
     protocol:   null,
@@ -45,7 +51,7 @@ var socket = net.connect({
                 throw err;
             }
             rfb.protocol.send('SetEncodings', {
-                encodingTypes: [16]
+                encodingTypes: [-260, 7]
             }, function (err) {
                 if (err) {
                     console.log('SetEncodings failed');

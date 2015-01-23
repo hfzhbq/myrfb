@@ -39,6 +39,46 @@ describe('RectangleFactory', function () {
 
             done();
         });
+        
+        it('should instantiate custom rectangles', function (done) {
+            var rectHead = {
+                encodingType:   333
+            };
+            var rect = {a: 'custom rectangle'};
+            var Constr = test.sinon.stub().withArgs(rectHead).returns(rect);
+            this.PredefinedRectangles.create.withArgs(rectHead).returns(null);
+            
+            this.RectangleFactory.addRectangle(rectHead.encodingType, Constr);
+            
+            var res = this.RectangleFactory.create(rectHead);
+            
+            expect(res).to.equal(rect);
+            
+            done();
+        });
+        
+        it('should throw if encoding is unknown', function (done) {
+            var rectHead = {
+                encodingType:   333
+            };
+            this.PredefinedRectangles.create.withArgs(rectHead).returns(null);
+            
+            var RF = this.RectangleFactory;
+            
+            expect( function () {
+                RF.create(rectHead);
+            }).to.throw('encoding is unknown');
+            
+            done();
+        });
+    });
+    
+    
+    describe('.addRectangle(messageType, Constructor)', function () {
+        it('should be a static method', function (done) {
+            expect(this.RectangleFactory.addRectangle).to.be.a('function');
+            done();
+        });
     });
 
 

@@ -11,6 +11,7 @@ describe('MyRFB', function () {
         this.async = test.mock('async');
 
         this.MessageFactory = test.mock('MessageFactory');
+        this.RectangleFactory = test.mock('RectangleFactory');
 
         this.incomingStream = test.mock('incomingStream');
         this.RFBIncomingStream = test.mock('RFBIncomingStream');
@@ -20,6 +21,7 @@ describe('MyRFB', function () {
             events: this.events,
             async:  this.async,
             './MessageFactory': this.MessageFactory,
+            './RectangleFactory': this.RectangleFactory,
             './RFBIncomingStream': this.RFBIncomingStream
         });
 
@@ -84,6 +86,84 @@ describe('MyRFB', function () {
                 }).to.throw('be either "server"');
             });
 
+            done();
+        });
+    });
+    
+    
+    
+    
+    describe('.use(mod)', function () {
+        it('should be a static method', function (done) {
+            expect(this.MyRFB.use).to.be.a('function');
+            done();
+        });
+        
+        it('should call mod passing self as an argument', function (done) {
+            var mod = test.sinon.spy();
+            this.MyRFB.use(mod);
+            
+            expect(mod).calledOnce
+            .and.calledWithExactly(this.MyRFB);
+            
+            done();
+        });
+        
+        it('should throw if mod is not a function', function (done) {
+            var MyRFB = this.MyRFB;
+            
+            ['', {}, [], 33, null, undefined].forEach( function (mod) {
+                expect( function () {
+                    MyRFB.use(mod);
+                }).to.throw('be a function');
+            });
+            
+            done();
+        });
+    });
+    
+    
+    
+    describe('.addRectangle(encodingType, Constr)', function () {
+        it('should be a static method', function (done) {
+            expect(this.MyRFB.addRectangle).to.be.a('function');
+            done();
+        });
+        
+        it('should call RectandleFactory.addRectangle()', function (done) {
+            var encodingType = 444;
+            var Constr = test.sinon.spy();
+            
+            this.MyRFB.addRectangle(encodingType, Constr);
+            
+            expect(this.RectangleFactory.addRectangle).calledOnce
+            .and.calledWithExactly(encodingType, Constr);
+            
+            done();
+        });
+        
+        it('should throw if encodingType is not a number', function (done) {
+            var MyRFB = this.MyRFB;
+            var Constr = test.sinon.spy();
+            
+            [null, undefined, 'd333', NaN, {}, [], test.sinon.spy()].forEach( function (encodingType) {
+                expect( function () {
+                    MyRFB.addRectangle(encodingType, Constr);
+                }).to.throw('a number');
+            });
+            
+            done();
+        });
+        
+        it('should throw if Constr is not a function', function (done) {
+            var MyRFB = this.MyRFB;
+            var encodingType = 12;
+            
+            [null, undefined, {}, [], 23, NaN, 'abra'].forEach( function (Constr) {
+                expect( function () {
+                    MyRFB.addRectangle(encodingType, Constr);
+                }).to.throw('a function');
+            });
             done();
         });
     });
