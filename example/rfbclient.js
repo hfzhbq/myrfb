@@ -30,8 +30,8 @@ var rfb = {
 };
 
 var socket = net.connect({
-    host:   'mark.codetek.ru',
-    port:   7103
+    host:   'localhost',
+    port:   5900
 }, function () {
     console.log('Socket connected');
     rfb.protocol = MyRFB.create(socket, 'client');
